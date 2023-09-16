@@ -1,13 +1,35 @@
 #![crate_name = "sneedov"]
 
+use std::env;
+
 // use sneedov::sneedov_append_word;
-use sneedov::sneedov_generate;
+use sneedov::{sneedov_feed, sneedov_generate};
 
-fn main() {
-    // let sentence: &str = "🤣 LMAOOOOOO im dead";
-
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args: Vec<String> = env::args().collect();
+    if args.len() > 1 {
+        if let Err(e) = sneedov_feed(&args[1], "test") {
+            eprintln!("Could not feed and seed: {}", e);
+            return Err(e);
+        }
+    }
+    // let sentence: &str = "He will always be a gem 💎";
+    // if let Err(e) = sneedov_append_line("test", sentence) {
+    //     eprintln!("Error appending: {}", e);
+    // }
     // let _ = set_keywords("test");
     // let words = split_sentence!(sentence);
     // count_adjacent(&words);
-    println!("{}", sneedov_generate("test").unwrap());
+
+    let generation = sneedov_generate("test");
+    match generation {
+        Ok(gen) => {
+            println!("{}", gen);
+            Ok(())
+        }
+        Err(err) => {
+            eprintln!("Could not generate: {}", err);
+            Err(err)
+        }
+    }
 }
