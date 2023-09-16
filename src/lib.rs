@@ -137,7 +137,7 @@ pub fn set_keywords(filename: &str) -> Result<(), Error> {
 ///
 ///# Arguments
 ///
-///* 'filename' -  File name for the file to save to
+///* `filename` -  File name for the file to save to
 ///* `word` -  The word that gets appended
 ///* `filename` -  The future word that occurs after the current one
 ///
