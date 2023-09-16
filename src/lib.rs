@@ -116,8 +116,7 @@ fn get_occurances(line: &str) -> Result<Vec<(usize, usize)>, Box<dyn std::error:
 fn get_line(filename: &str, index: usize) -> Result<String, std::io::Error> {
     let file = OpenOptions::new()
         .read(true)
-        .open(format!("{}words", filename))
-        .unwrap();
+        .open(format!("{}words", filename))?;
 
     let mut reader = BufReader::new(&file);
     let mut string = String::new();
@@ -128,9 +127,8 @@ fn get_line(filename: &str, index: usize) -> Result<String, std::io::Error> {
     Ok(line)
 }
 
-fn get_word(lineresult: &Result<String, std::io::Error>) -> String {
-    let line = lineresult.as_ref();
-    let mut split_line = line.unwrap().split_whitespace();
+fn get_word(line: &String) -> String {
+    let mut split_line = line.split_whitespace();
     split_line.next().unwrap().to_owned()
 }
 
@@ -295,13 +293,13 @@ pub fn sneedov_generate(filename: &str) -> Result<String, Box<dyn std::error::Er
     let mut sentence = String::new();
 
     loop {
-        let line = get_line(filename, index);
+        let line = get_line(filename, index)?;
         let word = get_word(&line);
 
         if word == END_KEYWORD {
             break;
         }
-        index = get_next_word(get_occurances(line.unwrap().as_str()).unwrap());
+        index = get_next_word(get_occurances(line.as_str()).unwrap());
 
         if word != START_KEYWORD {
             let is_punc: bool = is_punctuation(word.parse::<char>());
@@ -314,4 +312,21 @@ pub fn sneedov_generate(filename: &str) -> Result<String, Box<dyn std::error::Er
     }
 
     Ok(sentence)
+}
+
+pub fn sneedov_feed(filename: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let file = OpenOptions::new().read(true).open("filename")?;
+
+    let mut reader = BufReader::new(&file);
+    let mut string = String::new();
+
+    set_keywords("test")?;
+
+    let _ = reader.read_to_string(&mut string);
+    for line in string.split("\n") {
+        let words = split_sentence!(line);
+        //count_adjacent(&words);
+    }
+
+    Ok(())
 }
