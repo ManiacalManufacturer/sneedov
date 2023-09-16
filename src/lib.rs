@@ -59,22 +59,6 @@ fn return_index(file: &File, word: &str) -> Option<usize> {
             }
         }
     }
-
-    // if let Some(index) = lines
-    //     .enumerate()
-    //     .filter(|(_, e)| {
-    //         e.as_ref()
-    //             .unwrap()
-    //             .split_whitespace()
-    //             .filter(|e| e == &word)
-    //             .next()
-    //             .is_some()
-    //     })
-    //     .map(|(i, _)| i)
-    //     .next()
-    // {
-    //     return Some(index);
-    // }
     None
 }
 
@@ -103,8 +87,6 @@ fn increment_line(line: &str, index: usize) -> String {
                 exists = true;
             }
         }
-
-        //println!("{}", &_current_word);
         new_line.push_str(&_current_word);
         new_line.push_str(" ");
     }
@@ -113,8 +95,6 @@ fn increment_line(line: &str, index: usize) -> String {
         _current_word = format!("{}:{}", index, 1);
         new_line.push_str(&_current_word);
     }
-
-    //println!("{}", new_line);
     new_line
 }
 
@@ -139,7 +119,6 @@ fn add_word(filename: &str, keyword: &str) -> Result<usize, Error> {
     let lines = BufReader::new(&file).lines();
     for _ in lines {
         count += 1;
-        //println!("{}", count);
     }
     Ok(count as usize)
 }
@@ -154,6 +133,14 @@ pub fn set_keywords(filename: &str) -> Result<(), Error> {
     Ok(())
 }
 
+///Appends a word and increments the occurance of the next word to a file
+///
+///# Arguments
+///
+///* 'filename' -  File name for the file to save to
+///* `word` -  The word that gets appended
+///* `filename` -  The future word that occurs after the current one
+///
 pub fn sneedov_append(filename: &str, word: &str, next_word: &str) -> Result<(), Error> {
     let result = add_word(filename, word);
 
@@ -187,7 +174,6 @@ pub fn sneedov_append(filename: &str, word: &str, next_word: &str) -> Result<(),
             let mut reader = BufReader::new(&write_file);
             let mut string: String = String::new();
             let mut new_string: String = String::new();
-            //println!("{}\n{}", &specific_line, &new_line);
             let _ = reader.read_to_string(&mut string);
             let mut vec: Vec<&str> = string.split("\n").collect();
 
@@ -199,10 +185,6 @@ pub fn sneedov_append(filename: &str, word: &str, next_word: &str) -> Result<(),
                 }
             }
 
-            //string = string.replace(&specific_line, &new_line);
-
-            //println!("{}", string);
-
             write_file.rewind().unwrap();
             if let Err(e) = write!(&mut write_file, "{}", new_string) {
                 return Err(e);
@@ -213,14 +195,6 @@ pub fn sneedov_append(filename: &str, word: &str, next_word: &str) -> Result<(),
         }
         Err(e) => Err(e),
     }
-
-    // let _file = OpenOptions::new()
-    //     .read(true)
-    //     .write(true)
-    //     .append(true)
-    //     .create(true)
-    //     .open(format!("{}words", filename))
-    //     .unwrap();
 }
 
 pub fn sneedov_generate() {}

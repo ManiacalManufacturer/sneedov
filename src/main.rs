@@ -1,3 +1,5 @@
+#![crate_name = "sneedov"]
+
 use sneedov::set_keywords;
 use sneedov::sneedov_append;
 
@@ -33,10 +35,6 @@ fn split_punctuation(split: Vec<&str>) -> Vec<String> {
     vec
 }
 
-//testtesti
-
-//anothertest
-
 macro_rules! split_sentence {
     ($x:expr) => {{
         let vec: Vec<&str> = $x.split_whitespace().collect();
@@ -70,7 +68,7 @@ fn count_adjacent(vec: &Vec<String>) {
 }
 
 fn main() {
-    let sentence: &str = "🤣 What is BRUHHH even doing in a ohio 💀 town!";
+    let sentence: &str = "🤣 LMAOOOOOO im dead";
 
     let _ = set_keywords("test");
     let words = split_sentence!(sentence);
