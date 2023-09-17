@@ -88,6 +88,9 @@ fn increment_line(line: &str, index: usize) -> String {
         let mut split = word.split(":");
         if let Some(i) = split.next() {
             if i == index.to_string() {
+                split.next();
+            }
+            if i == index.to_string() {
                 let count: usize = split
                     .next()
                     .expect(format!("none unwrapped happened at {} in {}", word, line).as_str())
