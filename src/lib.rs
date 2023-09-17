@@ -21,6 +21,8 @@ fn split_punctuation(split: Vec<&str>) -> Vec<String> {
                     Some(..) => {
                         if last_char.unwrap() != second_last_char.unwrap()
                             && PUNCTUATION.contains(&last_char.unwrap())
+                            && second_last_char.unwrap() != '!'
+                            && second_last_char.unwrap() != '?'
                         {
                             vec.push(String::from(word.as_str()));
                             vec.push(String::from(last_char.unwrap()));

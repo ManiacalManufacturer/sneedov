@@ -13,6 +13,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Err(e);
         }
     }
+
     // let sentence: &str = "He will always be a gem 💎";
     // if let Err(e) = sneedov_append_line("test", sentence) {
     //     eprintln!("Error appending: {}", e);
