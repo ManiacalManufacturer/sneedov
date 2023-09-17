@@ -86,19 +86,24 @@ fn increment_line(line: &str, index: usize) -> String {
     for word in split_line {
         _current_word = word.to_string();
         let mut split = word.split(":");
+        split.next();
         if let Some(i) = split.next() {
             if i == index.to_string() {
-                let mut _count: usize = 0;
-                let countoption = split.next();
+                let count: usize = split.next().unwrap().parse::<usize>().unwrap() + 1;
+                _current_word = format!("{}:{}", index, count);
+                exists = true;
 
-                match countoption {
-                    Some(i) => {
-                        _count = i.parse::<usize>().unwrap() + 1;
-                        _current_word = format!("{}:{}", index, _count);
-                        exists = true;
-                    }
-                    None => {}
-                }
+                //let mut _count: usize = 0;
+                //let countoption = split.next();
+
+                //match countoption {
+                //     Some(i) => {
+                //         _count = i.parse::<usize>().unwrap() + 1;
+                // _current_word = format!("{}:{}", index, _count);
+                // exists = true;
+                //     }
+                //     None => {}
+                // }
                 //let count: usize = split.next().unwrap().parse::<usize>().unwrap() + 1;
             }
         }
