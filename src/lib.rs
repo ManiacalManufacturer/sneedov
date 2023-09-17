@@ -88,18 +88,18 @@ fn increment_line(line: &str, index: usize) -> String {
         let mut split = word.split(":");
         if let Some(i) = split.next() {
             if i == index.to_string() {
-                split.next();
-            }
-            if i == index.to_string() {
-                let count: usize = split
-                    .next()
-                    .expect(format!("none unwrapped happened at {} in {}", word, line).as_str())
-                    .parse::<usize>()
-                    .unwrap()
-                    + 1;
+                let mut _count: usize = 0;
+                let countoption = split.next();
+
+                match countoption {
+                    Some(i) => {
+                        _count = i.parse::<usize>().unwrap() + 1;
+                        _current_word = format!("{}:{}", index, _count);
+                        exists = true;
+                    }
+                    None => {}
+                }
                 //let count: usize = split.next().unwrap().parse::<usize>().unwrap() + 1;
-                _current_word = format!("{}:{}", index, count);
-                exists = true;
             }
         }
         new_line.push_str(&_current_word);
