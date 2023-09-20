@@ -1,10 +1,14 @@
+mod database;
+use database::{database, DatabaseMessage, DatabaseResult};
+use indicatif::ProgressIterator;
+
 use rand::prelude::*;
-use std::fs::{File, OpenOptions};
+use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::io::BufReader;
 
-const START_KEYWORD: &str = "__start";
-const END_KEYWORD: &str = "__end";
+const START_KEYWORD: &str = "start";
+const END_KEYWORD: &str = "end";
 const PUNCTUATION: [char; 6] = ['.', ',', '?', '!', ';', ':'];
 
 fn split_punctuation(split: Vec<&str>) -> Vec<String> {
@@ -54,115 +58,135 @@ fn split_sentence(line: String) -> Vec<String> {
     new_vec
 }
 
-fn return_index(file: &File, word: &str) -> Option<usize> {
-    let reader = BufReader::new(file);
-    let lines = reader.lines();
+// fn return_index(file: &File, word: &str) -> Option<usize> {
+//     let reader = BufReader::new(file);
+//     let lines = reader.lines();
 
-    for (index, instance) in lines.enumerate() {
-        let unwrapped = instance.unwrap();
-        let entry = split_sentence(unwrapped);
-        if let Some(thing) = entry.first() {
-            if thing == word {
-                return Some(index);
-            }
-        }
-    }
-    None
-}
+//     for (index, instance) in lines.enumerate() {
+//         let unwrapped = instance.unwrap();
+//         let entry = split_sentence(unwrapped);
+//         if let Some(thing) = entry.first() {
+//             if thing == word {
+//                 return Some(index);
+//             }
+//         }
+//     }
+//     None
+// }
 
-fn write_to_file(file: &mut File, string: &str) -> Result<(), std::io::Error> {
-    if let Err(e) = writeln!(file, "{}", string) {
-        eprintln!("Error: Could not write to file: {}", e);
-        return Err(e);
-    }
+// fn write_to_file(file: &mut File, string: &str) -> Result<(), std::io::Error> {
+//     if let Err(e) = writeln!(file, "{}", string) {
+//         eprintln!("Error: Could not write to file: {}", e);
+//         return Err(e);
+//     }
+//     Ok(())
+// }
+
+fn increment_next_word(
+    filename: String,
+    index1: usize,
+    index2: usize,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // let split_line = line.split_whitespace();
+    // let mut new_line: String = String::new();
+
+    // let mut _current_word: String = String::new();
+    // let mut exists: bool = false;
+
+    // for word in split_line {
+    //     _current_word = word.to_string();
+    //     let mut split = word.split(":");
+    //     split.next();
+    //     if let Some(i) = split.next() {
+    //         if i == index.to_string() {
+    //             let count: usize = split.next().unwrap().parse::<usize>().unwrap() + 1;
+    //             _current_word = format!("{}:{}", index, count);
+    //             exists = true;
+
+    //let mut _count: usize = 0;
+    //let countoption = split.next();
+
+    //match countoption {
+    //     Some(i) => {
+    //         _count = i.parse::<usize>().unwrap() + 1;
+    // _current_word = format!("{}:{}", index, _count);
+    // exists = true;
+    //     }
+    //     None => {}
+    // }
+    //let count: usize = split.next().unwrap().parse::<usize>().unwrap() + 1;
+    //        }
+    //    }
+    //     new_line.push_str(&_current_word);
+    //     new_line.push_str(" ");
+    // }
+
+    // if !exists {
+    //     _current_word = format!("{}:{}", index, 1);
+    //     new_line.push_str(&_current_word);
+    // }
+    database(filename, DatabaseMessage::Increment(index1, index2))?;
     Ok(())
 }
 
-fn increment_line(line: &str, index: usize) -> String {
-    let split_line = line.split_whitespace();
-    let mut new_line: String = String::new();
+fn get_occurrences(
+    filename: String,
+    index: usize,
+) -> Result<Vec<(usize, usize)>, Box<dyn std::error::Error>> {
+    // let mut split_line = line.split_whitespace();
+    // let mut vec: Vec<(usize, usize)> = vec![];
 
-    let mut _current_word: String = String::new();
-    let mut exists: bool = false;
+    // split_line.next();
+    // for word in split_line {
+    //     let mut split = word.split(":");
+    //     let tuple = (
+    //         split.next().unwrap().parse::<usize>()?,
+    //         split.next().unwrap().parse::<usize>()?,
+    //     );
+    //     vec.push(tuple)
+    // }
 
-    for word in split_line {
-        _current_word = word.to_string();
-        let mut split = word.split(":");
-        split.next();
-        if let Some(i) = split.next() {
-            if i == index.to_string() {
-                let count: usize = split.next().unwrap().parse::<usize>().unwrap() + 1;
-                _current_word = format!("{}:{}", index, count);
-                exists = true;
-
-                //let mut _count: usize = 0;
-                //let countoption = split.next();
-
-                //match countoption {
-                //     Some(i) => {
-                //         _count = i.parse::<usize>().unwrap() + 1;
-                // _current_word = format!("{}:{}", index, _count);
-                // exists = true;
-                //     }
-                //     None => {}
-                // }
-                //let count: usize = split.next().unwrap().parse::<usize>().unwrap() + 1;
-            }
-        }
-        new_line.push_str(&_current_word);
-        new_line.push_str(" ");
+    if let DatabaseResult::VecTuple(vec) = database(filename, DatabaseMessage::GetNextWords(index))?
+    {
+        return Ok(vec);
     }
-
-    if !exists {
-        _current_word = format!("{}:{}", index, 1);
-        new_line.push_str(&_current_word);
-    }
-    new_line
+    let err: Box<dyn std::error::Error> = "Could not get vec!".into();
+    Err(err)
 }
 
-fn get_occurances(line: &str) -> Result<Vec<(usize, usize)>, Box<dyn std::error::Error>> {
-    let mut split_line = line.split_whitespace();
-    let mut vec: Vec<(usize, usize)> = vec![];
+// fn get_line(filename: &str, index: usize) -> Result<String, Box<dyn std::error::Error>> {
+//     let file = OpenOptions::new()
+//         .read(true)
+//         .open(format!("{}", filename))?;
 
-    split_line.next();
-    for word in split_line {
-        let mut split = word.split(":");
-        let tuple = (
-            split.next().unwrap().parse::<usize>()?,
-            split.next().unwrap().parse::<usize>()?,
-        );
-        vec.push(tuple)
+//     let mut reader = BufReader::new(&file);
+//     let mut string = String::new();
+//     let _ = reader.read_to_string(&mut string);
+
+//     let line = string.split("\n").nth(index);
+//     match line {
+//         Some(value) => Ok(value.to_owned()),
+//         None => {
+//             let err: Box<dyn std::error::Error> =
+//                 String::from("None was returned. Is your file corrupted or missing?").into();
+//             Err(err)
+//         }
+//     }
+// }
+
+fn get_word(filename: String, index: usize) -> Result<String, Box<dyn std::error::Error>> {
+    // let mut split_line = line.split_whitespace();
+    // //split_line.next().unwrap().to_owned()
+    // if let Some(word) = split_line.next() {
+    //     return Ok(word.to_owned());
+    // }
+    if let DatabaseResult::String(string) = database(filename, DatabaseMessage::GetWord(index))? {
+        return Ok(string);
     }
-    Ok(vec)
-}
+    let err: Box<dyn std::error::Error> =
+        String::from("None was returned. Is your file corrupted or missing?").into();
 
-fn get_line(filename: &str, index: usize) -> Result<String, Box<dyn std::error::Error>> {
-    let file = OpenOptions::new()
-        .read(true)
-        .open(format!("{}", filename))?;
-
-    let mut reader = BufReader::new(&file);
-    let mut string = String::new();
-    let _ = reader.read_to_string(&mut string);
-
-    let line = string.split("\n").nth(index);
-    match line {
-        Some(value) => Ok(value.to_owned()),
-        None => {
-            let err: Box<dyn std::error::Error> =
-                String::from("None was returned. Is your file corrupted or missing?").into();
-            Err(err)
-        }
-    }
-}
-
-fn get_word(line: &String) -> Result<String, &'static str> {
-    let mut split_line = line.split_whitespace();
-    //split_line.next().unwrap().to_owned()
-    if let Some(word) = split_line.next() {
-        return Ok(word.to_owned());
-    }
-    Err("None was returned. Is your file corrupted or missing?")
+    Err(err)
 }
 
 fn get_next_word(vec: Vec<(usize, usize)>) -> usize {
@@ -185,49 +209,62 @@ fn get_next_word(vec: Vec<(usize, usize)>) -> usize {
     vec.choose_weighted(&mut rng, |item| item.1).unwrap().0
 }
 
-fn add_word(filename: &str, keyword: &str) -> Result<usize, std::io::Error> {
-    let mut file = OpenOptions::new()
-        .read(true)
-        .append(true)
-        .create(true)
-        .open(format!("{}", filename))
-        .unwrap();
+fn add_word(
+    filename: &str,
+    keyword: &str,
+    string: &str,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    // let mut file = OpenOptions::new()
+    //     .read(true)
+    //     .append(true)
+    //     .create(true)
+    //     .open(format!("{}", filename))
+    //     .unwrap();
 
-    if let Some(index) = return_index(&file, keyword) {
-        return Ok(index);
-    } else {
-        if let Err(e) = write_to_file(&mut file, keyword) {
-            return Err(e);
-        }
+    // if let Some(index) = return_index(&file, keyword) {
+    //     return Ok(index);
+    // } else {
+    //     if let Err(e) = write_to_file(&mut file, keyword) {
+    //         return Err(e);
+    //     }
+    // }
+    // let _ = file.flush();
+    // file.rewind().unwrap();
+    // let mut count: isize = -1;
+    // let lines = BufReader::new(&file).lines();
+    // for _ in lines {
+    //     count += 1;
+    // }
+    // Ok(count as usize)
+    if let DatabaseResult::Int(id) = database(
+        filename.to_owned(),
+        DatabaseMessage::AddWord(keyword.to_owned(), string.to_owned()),
+    )? {
+        return Ok(id);
     }
-    let _ = file.flush();
-    file.rewind().unwrap();
-    let mut count: isize = -1;
-    let lines = BufReader::new(&file).lines();
-    for _ in lines {
-        count += 1;
-    }
-    Ok(count as usize)
+
+    let err: Box<dyn std::error::Error> = "Could not return id".into();
+    Err(err)
 }
 
-fn get_sanitized_word(keyword: &str) -> String {
-    if keyword == START_KEYWORD || keyword == END_KEYWORD {
-        let mut new_word = String::new();
-        new_word.push('_');
-        new_word.push_str(keyword);
-        return new_word;
-    }
-    keyword.to_owned()
-}
-
-fn fix_fake_keyword(keyword: &str) -> &str {
-    if keyword == "___start" || keyword == "___end" {
-        let mut chars = keyword.chars();
-        chars.next();
-        return chars.as_str();
-    }
-    keyword
-}
+// fn get_sanitized_word(keyword: &str) -> String {
+//     if keyword == START_KEYWORD || keyword == END_KEYWORD {
+//         let mut new_word = String::new();
+//         new_word.push('_');
+//         new_word.push_str(keyword);
+//         return new_word;
+//     }
+//     keyword.to_owned()
+// }
+//
+// fn fix_fake_keyword(keyword: &str) -> &str {
+//     if keyword == "___start" || keyword == "___end" {
+//         let mut chars = keyword.chars();
+//         chars.next();
+//         return chars.as_str();
+//     }
+//     keyword
+// }
 
 fn is_punctuation(charresult: Result<char, std::char::ParseCharError>) -> bool {
     match charresult {
@@ -236,11 +273,11 @@ fn is_punctuation(charresult: Result<char, std::char::ParseCharError>) -> bool {
     }
 }
 
-pub fn set_keywords(filename: &str) -> Result<(), std::io::Error> {
-    if let Err(e1) = add_word(filename, END_KEYWORD) {
+pub fn set_keywords(filename: &str) -> Result<(), Box<dyn std::error::Error>> {
+    if let Err(e1) = add_word(filename, END_KEYWORD, "") {
         return Err(e1);
     }
-    if let Err(e2) = add_word(filename, START_KEYWORD) {
+    if let Err(e2) = add_word(filename, START_KEYWORD, "") {
         return Err(e2);
     }
     Ok(())
@@ -256,63 +293,57 @@ pub fn set_keywords(filename: &str) -> Result<(), std::io::Error> {
 ///
 pub fn sneedov_append_word(
     filename: &str,
-    word: &str,
-    next_word: &str,
-) -> Result<(), std::io::Error> {
-    let result = add_word(filename, word);
+    keyword: &str,
+    string: &str,
+    next_keyword: &str,
+    next_string: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let index1 = add_word(filename, keyword, string)?;
 
-    match result {
-        Ok(i) => {
-            let num = add_word(filename, next_word);
-            if let Err(e) = num {
-                return Err(e);
-            }
+    let index2 = add_word(filename, next_keyword, next_string)?;
 
-            let mut read_file = OpenOptions::new()
-                .read(true)
-                .append(false)
-                .open(format!("{}", filename))?;
+    // let mut read_file = OpenOptions::new()
+    //     .read(true)
+    //     .append(false)
+    //     .open(format!("{}", filename))?;
 
-            let reader = BufReader::new(&read_file);
-            let mut lines = reader.lines();
+    // let reader = BufReader::new(&read_file);
+    // let mut lines = reader.lines();
 
-            let specific_line = lines.nth(i).unwrap()?;
-            let new_line = increment_line(&specific_line, num?);
-            read_file.rewind()?;
+    // let specific_line = lines.nth(i).unwrap()?;
+    // let new_line = increment_line(&specific_line, num?);
+    // read_file.rewind()?;
 
-            let mut write_file = OpenOptions::new()
-                .read(true)
-                .write(true)
-                .append(false)
-                .open(format!("{}", filename))?;
+    // let mut write_file = OpenOptions::new()
+    //     .read(true)
+    //     .write(true)
+    //     .append(false)
+    //     .open(format!("{}", filename))?;
 
-            let mut reader = BufReader::new(&write_file);
-            let mut string: String = String::new();
-            let mut new_string: String = String::new();
-            let _ = reader.read_to_string(&mut string);
-            let mut vec: Vec<&str> = string.split("\n").collect();
+    // let mut reader = BufReader::new(&write_file);
+    // let mut string: String = String::new();
+    // let mut new_string: String = String::new();
+    // let _ = reader.read_to_string(&mut string);
+    // let mut vec: Vec<&str> = string.split("\n").collect();
 
-            vec[i] = &new_line;
-            for line in vec {
-                if line != "" {
-                    new_string.push_str(line);
-                    new_string.push_str("\n");
-                }
-            }
+    // vec[i] = &new_line;
+    // for line in vec {
+    //     if line != "" {
+    //         new_string.push_str(line);
+    //         new_string.push_str("\n");
+    //     }
+    // }
 
-            write_file.rewind()?;
-            if let Err(e) = write!(&mut write_file, "{}", new_string) {
-                return Err(e);
-            }
-            let _ = write_file.flush();
-
-            Ok(())
-        }
-        Err(e) => Err(e),
-    }
+    // write_file.rewind()?;
+    // if let Err(e) = write!(&mut write_file, "{}", new_string) {
+    //     return Err(e);
+    // }
+    // let _ = write_file.flush();
+    increment_next_word(filename.into(), index1, index2)?;
+    Ok(())
 }
 
-pub fn sneedov_append_line(filename: &str, line: &str) -> Result<(), std::io::Error> {
+pub fn sneedov_append_line(filename: &str, line: &str) -> Result<(), Box<dyn std::error::Error>> {
     let line = line.to_owned();
     let iter = split_sentence(line);
     let mut words = iter.iter().peekable();
@@ -320,20 +351,37 @@ pub fn sneedov_append_line(filename: &str, line: &str) -> Result<(), std::io::Er
     if !words.peek().is_none() {
         sneedov_append_word(
             filename,
-            "__start",
-            get_sanitized_word(words.peek().unwrap()).as_str(),
+            "start",
+            "",
+            "first",
+            words.peek().unwrap().as_str(),
         )?;
     }
+    let mut keyword = "first";
+    let mut next_keyword = "middle";
     while let Some(word) = words.next() {
         if !words.peek().is_none() {
+            let last = words.clone().last().unwrap();
+            if words.peek().unwrap() == &last {
+                next_keyword = "last";
+            }
             sneedov_append_word(
                 filename,
-                get_sanitized_word(word).as_str(),
+                keyword,
+                word.as_str(),
+                next_keyword,
                 words.peek().unwrap(),
             )?;
+            //println!(
+            //     "{} {}",
+            //     get_sanitized_word(word).as_str(),
+            //     words.peek().unwrap()
+            // );
         } else {
-            sneedov_append_word(filename, get_sanitized_word(word).as_str(), "__end")?;
+            sneedov_append_word(filename, "last", word.as_str(), "end", "")?;
+            //println!("{} {}", get_sanitized_word(word).as_str(), "__end");
         }
+        keyword = "middle";
     }
 
     Ok(())
@@ -347,26 +395,24 @@ pub fn sneedov_append_line(filename: &str, line: &str) -> Result<(), std::io::Er
 ///
 pub fn sneedov_generate(filename: &str) -> Result<String, Box<dyn std::error::Error>> {
     //code goes here
-    let mut index = 1;
+    let mut index = 2;
     let mut sentence = String::new();
 
     loop {
-        let line = get_line(filename, index)?;
-        let word = get_word(&line)?;
+        index = get_next_word(get_occurrences(filename.to_owned(), index)?);
 
-        if word == END_KEYWORD {
+        if index == 1 {
             break;
         }
-        index = get_next_word(get_occurances(line.as_str())?);
 
-        if word != START_KEYWORD {
-            let is_punc: bool = is_punctuation(word.parse::<char>());
+        let word = get_word(filename.to_owned(), index)?;
 
-            if sentence.len() != 0 && !is_punc {
-                sentence.push_str(" ");
-            }
-            sentence.push_str(fix_fake_keyword(&word));
+        let is_punc: bool = is_punctuation(word.parse::<char>());
+
+        if sentence.len() != 0 && !is_punc {
+            sentence.push_str(" ");
         }
+        sentence.push_str(&word);
     }
 
     Ok(sentence)
@@ -378,13 +424,15 @@ pub fn sneedov_feed(filename: &str, new_filename: &str) -> Result<(), Box<dyn st
     let mut reader = BufReader::new(&file);
     let mut string = String::new();
 
-    set_keywords("test")?;
+    set_keywords(new_filename)?;
 
     let _ = reader.read_to_string(&mut string);
-    for line in string.split("\n") {
+    let vec: Vec<&str> = string.split("\n").collect();
+    let iter = vec.iter();
+    for line in iter.progress() {
         //let words = split_sentence!(line);
         //count_adjacent(&words);
-        if line != "" {
+        if line != &"" {
             if let Err(e) = sneedov_append_line(new_filename, line) {
                 eprintln!("Error feeding: {}", e);
             }
