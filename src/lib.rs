@@ -405,7 +405,6 @@ pub fn sneedov_generate(filename: &str) -> Result<String, Box<dyn std::error::Er
 
     loop {
         index = get_next_word(get_occurrences(filename.to_owned(), index)?)?;
-        println!("{}", index);
         if index == 1 {
             break;
         }
