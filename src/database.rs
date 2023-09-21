@@ -25,8 +25,8 @@ const INIT_QUERY: &str = "
     );
 
     CREATE TABLE IF NOT EXISTS Occurrence (
-        index1 INT,
-        index2 INT,
+        index1 INT NOT NULL,
+        index2 INT NOT NULL,
         occurrences INT,
         UNIQUE(index1, index2)
     );
