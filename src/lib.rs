@@ -349,11 +349,16 @@ pub fn sneedov_append_line(filename: &str, line: &str) -> Result<(), Box<dyn std
     let mut words = iter.iter().peekable();
 
     if !words.peek().is_none() {
+        let mut keyword = "first";
+        let last = words.clone().last().unwrap();
+        if words.peek().unwrap() == &last {
+            keyword = "last";
+        }
         sneedov_append_word(
             filename,
             "start",
             "",
-            "first",
+            keyword,
             words.peek().unwrap().as_str(),
         )?;
     }
@@ -400,7 +405,7 @@ pub fn sneedov_generate(filename: &str) -> Result<String, Box<dyn std::error::Er
 
     loop {
         index = get_next_word(get_occurrences(filename.to_owned(), index)?)?;
-
+        println!("{}", index);
         if index == 1 {
             break;
         }
