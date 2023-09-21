@@ -14,8 +14,6 @@ pub enum DatabaseResult {
     VecTuple(Vec<(usize, usize)>),
 }
 
-// const PATH_TO_DATABASE: &str = "./database/{}/{}.db";
-
 const INIT_QUERY: &str = "
     CREATE TABLE IF NOT EXISTS Words(
         id INTEGER PRIMARY KEY,
@@ -31,13 +29,6 @@ const INIT_QUERY: &str = "
         UNIQUE(index1, index2)
     );
 ";
-
-// const ADD_QUERY: &str = "
-//     INSERT OR REPLACE INTO Words (keyword, string) VALUES(
-//         :keyword,
-//         :string
-//     );
-// ";
 
 const ADD_QUERY: &str = "
     INSERT OR IGNORE INTO Words (id, keyword, string) VALUES(
@@ -72,14 +63,9 @@ pub fn database(
     let path = std::path::Path::new(path_name);
     let connection = sqlite::Connection::open_with_flags(path, flags)?;
 
-    // while let Ok(sqlite::State::Row) = statement.next() {
-    //     println!("Test");
-    // }
     connection.execute(INIT_QUERY)?;
-    //let query = String::new();
 
     match message {
-        //TODO: Create a table for the new word
         DatabaseMessage::AddWord(a, b) => {
             let mut statement = connection.prepare(ADD_QUERY)?;
             statement.bind_iter::<_, (_, sqlite::Value)>([
@@ -88,19 +74,6 @@ pub fn database(
             ])?;
 
             while let Ok(sqlite::State::Row) = statement.next() {}
-            // let format = format!(
-            //     "
-            //     INSERT OR IGNORE INTO Words (id, keyword, string) VALUES(
-            //             null,
-            //             '{}',
-            //             '{}'
-            //     );
-            //     ",
-            //     a.clone(),
-            //     b.clone()
-            // );
-            // println!("{}", format);
-            // connection.execute(format)?;
 
             let mut statement = connection
                 .prepare("SELECT id FROM Words WHERE keyword = :keyword AND string = :string")?;
@@ -114,40 +87,14 @@ pub fn database(
                 id = statement.read::<i64, _>("id").unwrap();
             }
 
-            // let mut statement = connection.prepare(CREATE_QUERY)?;
-            // statement.bind((":id", id))?;
-
-            // while let Ok(sqlite::State::Row) = statement.next() {}
-            // let format = format!(
-            //     "
-            //     CREATE TABLE IF NOT EXISTS Word{}(
-            //         id INTEGER PRIMARY KEY,
-            //         occurrences INT
-            //     );
-            // ",
-            //     id
-            // );
-            // println!("{}", format);
-            // connection.execute(format)?;
             return Ok(DatabaseResult::Int(id as usize));
         }
         DatabaseMessage::Increment(a, b) => {
-            //TODO: Add increment
-            // let format = format!(
-            //     "
-            //     INSERT INTO Word{} (id, occurrences) VALUES({}, 1)
-            //     ON CONFLICT(id) DO UPDATE SET occurrences = occurrences + 1;
-            // ",
-            //     a, b
-            // );
-            // println!("{}", format);
-            // connection.execute(format)?;
             let mut statement = connection.prepare(INCREMENT_QUERY)?;
             statement.bind_iter::<_, (_, i64)>([(":index1", a as i64), (":index2", b as i64)])?;
             while let Ok(sqlite::State::Row) = statement.next() {}
         }
         DatabaseMessage::GetWord(a) => {
-            //TODO: Add get word
             let mut statement = connection.prepare(GET_QUERY)?;
             statement.bind((":id", a as i64))?;
 
@@ -158,7 +105,6 @@ pub fn database(
             }
         }
         DatabaseMessage::GetNextWords(a) => {
-            //TODO: Add get next words
             let mut statement = connection.prepare(GET_NEXT_QUERY)?;
             statement.bind((":index1", a as i64))?;
 
@@ -173,6 +119,5 @@ pub fn database(
         }
     };
 
-    //TODO: Add executing query here
     Ok(DatabaseResult::None)
 }

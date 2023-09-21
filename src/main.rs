@@ -2,7 +2,6 @@
 
 use std::env;
 
-// use sneedov::sneedov_append_word;
 use sneedov::{sneedov_feed, sneedov_generate};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -18,14 +17,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // // let sentence: &str = "He will always be a gem 💎";
-    // // if let Err(e) = sneedov_append_line("test", sentence) {
-    // //     eprintln!("Error appending: {}", e);
-    // // }
-    // // let _ = set_keywords("test");
-    // // let words = split_sentence!(sentence);
-    // // count_adjacent(&words);
-
     let generation = sneedov_generate("test");
     match generation {
         Ok(gen) => {
@@ -37,10 +28,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Err(err)
         }
     }
-
-    // let message = DatabaseMessage::AddWord("start".to_owned(), "".to_owned());
-    // if let Err(e) = database("a".to_owned(), message).await {
-    //     eprintln!("{}", e);
-    // }
-    //Ok(())
 }
