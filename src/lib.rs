@@ -189,7 +189,7 @@ fn get_word(filename: String, index: usize) -> Result<String, Box<dyn std::error
     Err(err)
 }
 
-fn get_next_word(vec: Vec<(usize, usize)>) -> usize {
+fn get_next_word(vec: Vec<(usize, usize)>) -> Result<usize, Box<dyn std::error::Error>> {
     //let mut total_vec: Vec<usize> = vec![];
     //let tuple_vec: Vec<(usize, usize)> = vec.clone();
 
@@ -206,7 +206,7 @@ fn get_next_word(vec: Vec<(usize, usize)>) -> usize {
     // }
 
     let mut rng = thread_rng();
-    vec.choose_weighted(&mut rng, |item| item.1).unwrap().0
+    Ok(vec.choose_weighted(&mut rng, |item| item.1)?.0)
 }
 
 fn add_word(
@@ -399,7 +399,7 @@ pub fn sneedov_generate(filename: &str) -> Result<String, Box<dyn std::error::Er
     let mut sentence = String::new();
 
     loop {
-        index = get_next_word(get_occurrences(filename.to_owned(), index)?);
+        index = get_next_word(get_occurrences(filename.to_owned(), index)?)?;
 
         if index == 1 {
             break;
