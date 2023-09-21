@@ -1,6 +1,7 @@
 mod database;
 use database::{database, DatabaseMessage, DatabaseResult};
 use indicatif::ProgressIterator;
+use itertools::{Itertools, Position};
 
 use rand::prelude::*;
 use std::fs::OpenOptions;
@@ -344,49 +345,84 @@ pub fn sneedov_append_word(
 }
 
 pub fn sneedov_append_line(filename: &str, line: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let line = line.to_owned();
-    let iter = split_sentence(line);
-    let mut words = iter.iter().peekable();
+    let split = split_sentence(line.to_owned());
+    let iter = split.iter();
+    //let mut words = iter.iter().peekable();
 
-    if !words.peek().is_none() {
-        let mut keyword = "first";
-        let last = words.clone().last().unwrap();
-        if words.peek().unwrap() == &last {
-            keyword = "last";
-        }
-        sneedov_append_word(
-            filename,
-            "start",
-            "",
-            keyword,
-            words.peek().unwrap().as_str(),
-        )?;
-    }
-    let mut keyword = "first";
-    let mut next_keyword = "middle";
-    while let Some(word) = words.next() {
-        if !words.peek().is_none() {
-            let last = words.clone().last().unwrap();
-            if words.peek().unwrap() == &last {
-                next_keyword = "last";
+    // if !words.peek().is_none() {
+    //     let mut keyword = "first";
+    //     let last = words.clone().last().unwrap();
+    //     if words.peek().unwrap() == &last {
+    //         keyword = "last";
+    //     }
+    //     sneedov_append_word(
+    //         filename,
+    //         "start",
+    //         "",
+    //         keyword,
+    //         words.peek().unwrap().as_str(),
+    //     )?;
+    // }
+    // let mut keyword = "first";
+    // let mut next_keyword = "middle";
+    // while let Some(word) = words.next() {
+    //     if !words.peek().is_none() {
+    //         let last = words.clone().last().unwrap();
+    //         if words.peek().unwrap() == &last {
+    //             next_keyword = "last";
+    //         }
+    //         sneedov_append_word(
+    //             filename,
+    //             keyword,
+    //             word.as_str(),
+    //             next_keyword,
+    //             words.peek().unwrap(),
+    //         )?;
+    //         //println!(
+    //         //     "{} {}",
+    //         //     get_sanitized_word(word).as_str(),
+    //         //     words.peek().unwrap()
+    //         // );
+    //     } else {
+    //         sneedov_append_word(filename, "last", word.as_str(), "end", "")?;
+    //         //println!("{} {}", get_sanitized_word(word).as_str(), "__end");
+    //     }
+    //     keyword = "middle";
+    // }
+    let mut previous = String::new();
+    let mut previous_keyword = "first";
+    for word in iter.with_position() {
+        match word {
+            (Position::First, w) => {
+                sneedov_append_word(filename, START_KEYWORD, "", previous_keyword, w.as_str())?;
+                previous = w.to_owned();
             }
-            sneedov_append_word(
-                filename,
-                keyword,
-                word.as_str(),
-                next_keyword,
-                words.peek().unwrap(),
-            )?;
-            //println!(
-            //     "{} {}",
-            //     get_sanitized_word(word).as_str(),
-            //     words.peek().unwrap()
-            // );
-        } else {
-            sneedov_append_word(filename, "last", word.as_str(), "end", "")?;
-            //println!("{} {}", get_sanitized_word(word).as_str(), "__end");
+            (Position::Middle, w) => {
+                sneedov_append_word(
+                    filename,
+                    previous_keyword,
+                    previous.as_str(),
+                    "middle",
+                    w.as_str(),
+                )?;
+                previous = w.to_owned();
+                previous_keyword = "middle";
+            }
+            (Position::Last, w) => {
+                sneedov_append_word(
+                    filename,
+                    previous_keyword,
+                    previous.as_str(),
+                    "last",
+                    w.as_str(),
+                )?;
+                sneedov_append_word(filename, "last", w.as_str(), END_KEYWORD, "")?;
+            }
+            (Position::Only, w) => {
+                sneedov_append_word(filename, START_KEYWORD, "", "last", w.as_str())?;
+                sneedov_append_word(filename, "last", w.as_str(), END_KEYWORD, "")?;
+            }
         }
-        keyword = "middle";
     }
 
     Ok(())
@@ -405,6 +441,7 @@ pub fn sneedov_generate(filename: &str) -> Result<String, Box<dyn std::error::Er
 
     loop {
         index = get_next_word(get_occurrences(filename.to_owned(), index)?)?;
+
         if index == 1 {
             break;
         }
