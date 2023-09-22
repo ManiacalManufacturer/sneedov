@@ -52,19 +52,20 @@ fn split_sentence(line: String) -> Vec<String> {
 }
 
 fn increment_next_word(
-    filename: String,
+    connection: &sqlite::Connection,
     index1: usize,
     index2: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    database(filename, DatabaseMessage::Increment(index1, index2))?;
+    database(connection, DatabaseMessage::Increment(index1, index2))?;
     Ok(())
 }
 
 fn get_occurrences(
-    filename: String,
+    connection: &sqlite::Connection,
     index: usize,
 ) -> Result<Vec<(usize, usize)>, Box<dyn std::error::Error>> {
-    if let DatabaseResult::VecTuple(vec) = database(filename, DatabaseMessage::GetNextWords(index))?
+    if let DatabaseResult::VecTuple(vec) =
+        database(&connection, DatabaseMessage::GetNextWords(index))?
     {
         return Ok(vec);
     }
@@ -72,13 +73,16 @@ fn get_occurrences(
     Err(err)
 }
 
-fn get_word(filename: String, index: usize) -> Result<String, Box<dyn std::error::Error>> {
+fn get_word(
+    connection: &sqlite::Connection,
+    index: usize,
+) -> Result<String, Box<dyn std::error::Error>> {
     // let mut split_line = line.split_whitespace();
-    // //split_line.next().unwrap().to_owned()
+    // //spli&t_line.next().unwrap().to_owned()
     // if let Some(word) = split_line.next() {
     //     return Ok(word.to_owned());
     // }
-    if let DatabaseResult::String(string) = database(filename, DatabaseMessage::GetWord(index))? {
+    if let DatabaseResult::String(string) = database(connection, DatabaseMessage::GetWord(index))? {
         return Ok(string);
     }
     let err: Box<dyn std::error::Error> =
@@ -93,12 +97,12 @@ fn get_next_word(vec: Vec<(usize, usize)>) -> Result<usize, Box<dyn std::error::
 }
 
 fn add_word(
-    filename: &str,
+    connection: &sqlite::Connection,
     keyword: &str,
     string: &str,
 ) -> Result<usize, Box<dyn std::error::Error>> {
     if let DatabaseResult::Int(id) = database(
-        filename.to_owned(),
+        connection,
         DatabaseMessage::AddWord(keyword.to_owned(), string.to_owned()),
     )? {
         return Ok(id);
@@ -115,11 +119,11 @@ fn is_punctuation(charresult: Result<char, std::char::ParseCharError>) -> bool {
     }
 }
 
-fn set_keywords(filename: &str) -> Result<(), Box<dyn std::error::Error>> {
-    if let Err(e1) = add_word(filename, END_KEYWORD, "") {
+fn set_keywords(connection: &sqlite::Connection) -> Result<(), Box<dyn std::error::Error>> {
+    if let Err(e1) = add_word(connection, END_KEYWORD, "") {
         return Err(e1);
     }
-    if let Err(e2) = add_word(filename, START_KEYWORD, "") {
+    if let Err(e2) = add_word(connection, START_KEYWORD, "") {
         return Err(e2);
     }
     Ok(())
@@ -129,25 +133,28 @@ fn set_keywords(filename: &str) -> Result<(), Box<dyn std::error::Error>> {
 ///
 ///# Arguments
 ///
-///* `filename` -  File name for the file to save to
+///* `connection` -  File name for the file to save to
 ///* `word` -  The word that gets appended
 ///* `next_word` -  The future word that occurs after the current one
 ///
 pub fn sneedov_append_word(
-    filename: &str,
+    connection: &sqlite::Connection,
     keyword: &str,
     string: &str,
     next_keyword: &str,
     next_string: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let index1 = add_word(filename, keyword, string)?;
-    let index2 = add_word(filename, next_keyword, next_string)?;
+    let index1 = add_word(connection, keyword, string)?;
+    let index2 = add_word(connection, next_keyword, next_string)?;
 
-    increment_next_word(filename.into(), index1, index2)?;
+    increment_next_word(connection.into(), index1, index2)?;
     Ok(())
 }
 
-pub fn sneedov_append_line(filename: &str, line: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub fn sneedov_append_line(
+    connection: &sqlite::Connection,
+    line: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     let split = split_sentence(line.to_owned());
     let iter = split.iter();
 
@@ -156,12 +163,12 @@ pub fn sneedov_append_line(filename: &str, line: &str) -> Result<(), Box<dyn std
     for word in iter.with_position() {
         match word {
             (Position::First, w) => {
-                sneedov_append_word(filename, START_KEYWORD, "", previous_keyword, w.as_str())?;
+                sneedov_append_word(connection, START_KEYWORD, "", previous_keyword, w.as_str())?;
                 previous = w.to_owned();
             }
             (Position::Middle, w) => {
                 sneedov_append_word(
-                    filename,
+                    connection,
                     previous_keyword,
                     previous.as_str(),
                     "middle",
@@ -172,17 +179,17 @@ pub fn sneedov_append_line(filename: &str, line: &str) -> Result<(), Box<dyn std
             }
             (Position::Last, w) => {
                 sneedov_append_word(
-                    filename,
+                    connection,
                     previous_keyword,
                     previous.as_str(),
                     "last",
                     w.as_str(),
                 )?;
-                sneedov_append_word(filename, "last", w.as_str(), END_KEYWORD, "")?;
+                sneedov_append_word(connection, "last", w.as_str(), END_KEYWORD, "")?;
             }
             (Position::Only, w) => {
-                sneedov_append_word(filename, START_KEYWORD, "", "last", w.as_str())?;
-                sneedov_append_word(filename, "last", w.as_str(), END_KEYWORD, "")?;
+                sneedov_append_word(connection, START_KEYWORD, "", "last", w.as_str())?;
+                sneedov_append_word(connection, "last", w.as_str(), END_KEYWORD, "")?;
             }
         }
     }
@@ -194,21 +201,23 @@ pub fn sneedov_append_line(filename: &str, line: &str) -> Result<(), Box<dyn std
 ///
 ///# Arguments
 ///
-///* `filename` -  File name for the file to load from
+///* `connection` -  File name for the file to load from
 ///
-pub fn sneedov_generate(filename: &str) -> Result<String, Box<dyn std::error::Error>> {
+pub fn sneedov_generate(
+    connection: &sqlite::Connection,
+) -> Result<String, Box<dyn std::error::Error>> {
     //code goes here
     let mut index = 2;
     let mut sentence = String::new();
 
     loop {
-        index = get_next_word(get_occurrences(filename.to_owned(), index)?)?;
+        index = get_next_word(get_occurrences(connection, index)?)?;
 
         if index == 1 {
             break;
         }
 
-        let word = get_word(filename.to_owned(), index)?;
+        let word = get_word(connection, index)?;
 
         let is_punc: bool = is_punctuation(word.parse::<char>());
 
@@ -221,13 +230,16 @@ pub fn sneedov_generate(filename: &str) -> Result<String, Box<dyn std::error::Er
     Ok(sentence)
 }
 
-pub fn sneedov_feed(filename: &str, new_filename: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let file = OpenOptions::new().read(true).open(filename)?;
+pub fn sneedov_feed(
+    old_filename: &str,
+    connection: &sqlite::Connection,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let file = OpenOptions::new().read(true).open(old_filename)?;
 
     let mut reader = BufReader::new(&file);
     let mut string = String::new();
 
-    set_keywords(new_filename)?;
+    set_keywords(&connection)?;
 
     let _ = reader.read_to_string(&mut string);
     let vec: Vec<&str> = string.split("\n").collect();
@@ -236,7 +248,7 @@ pub fn sneedov_feed(filename: &str, new_filename: &str) -> Result<(), Box<dyn st
         //let words = split_sentence!(line);
         //count_adjacent(&words);
         if line != &"" {
-            if let Err(e) = sneedov_append_line(new_filename, line) {
+            if let Err(e) = sneedov_append_line(&connection, line) {
                 eprintln!("Error feeding: {}", e);
             }
         }
