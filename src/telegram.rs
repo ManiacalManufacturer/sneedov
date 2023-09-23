@@ -38,7 +38,7 @@ fn connect_database(chat_id: &str) -> Result<sqlite::Connection, sqlite::Error> 
         .set_create()
         .set_full_mutex()
         .set_read_write();
-    let path_name = format!("./{d}/{d}.db", d = chat_id);
+    let path_name = format!("./{d}.db", d = chat_id);
     let path = std::path::Path::new(&path_name);
     let connection = sqlite::Connection::open_with_flags(path, flags)?;
 
