@@ -52,16 +52,16 @@ const GET_NEXT_QUERY: &str = "
 ";
 
 pub fn database(
-    database: String,
+    connection: &sqlite::Connection,
     message: DatabaseMessage,
 ) -> Result<DatabaseResult, Box<dyn std::error::Error>> {
-    let flags = sqlite::OpenFlags::new()
-        .set_create()
-        .set_full_mutex()
-        .set_read_write();
-    let path_name = &format!("./{}.db", database);
-    let path = std::path::Path::new(path_name);
-    let connection = sqlite::Connection::open_with_flags(path, flags)?;
+    // let flags = sqlite::OpenFlags::new()
+    //     .set_create()
+    //     .set_full_mutex()
+    //     .set_read_write();
+    // let path_name = &format!("./{}.db", database);
+    // let path = std::path::Path::new(path_name);
+    // let connection = sqlite::Connection::open_with_flags(path, flags)?;
 
     connection.execute(INIT_QUERY)?;
 
