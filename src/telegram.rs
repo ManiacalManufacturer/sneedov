@@ -107,6 +107,7 @@ pub async fn start_dispatcher() -> Result<(), Box<dyn std::error::Error + Send +
     let bot = start_bot().await;
 
     Dispatcher::builder(bot, schema())
+        .dependencies(dptree::deps![dialogue::InMemStorage::<State>::new()])
         .enable_ctrlc_handler()
         .build()
         .dispatch()
