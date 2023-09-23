@@ -2,34 +2,37 @@
 
 use std::env;
 
-// use sneedov::sneedov_append_word;
-use sneedov::{sneedov_feed, sneedov_generate};
+use sneedov::markov::sneedov_feed;
+use sneedov::telegram::start_dispatcher;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args: Vec<String> = env::args().collect();
-    if args.len() > 1 {
-        if let Err(e) = sneedov_feed(&args[1], "test") {
-            eprintln!("Could not feed and seed: {}", e);
-            return Err(e);
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    {
+        let flags = sqlite::OpenFlags::new()
+            .set_create()
+            .set_full_mutex()
+            .set_read_write();
+
+        let args: Vec<String> = env::args().collect();
+        if args.len() > 1 {
+            use std::time::Instant;
+            let now = Instant::now();
+
+            let path_name = format!("./{d}.db", d = &args[2]);
+            let path = std::path::Path::new(&path_name);
+            let connection = sqlite::Connection::open_with_flags(path, flags)?;
+
+            if let Err(e) = sneedov_feed(&args[1], &connection) {
+                eprintln!("Could not feed and seed: {}", e);
+                return Err(e);
+            }
+
+            let elapsed = now.elapsed();
+            eprintln!("Time elapsed: {:.2?}\n", elapsed);
+
         }
     }
-    // let sentence: &str = "He will always be a gem 💎";
-    // if let Err(e) = sneedov_append_line("test", sentence) {
-    //     eprintln!("Error appending: {}", e);
-    // }
-    // let _ = set_keywords("test");
-    // let words = split_sentence!(sentence);
-    // count_adjacent(&words);
+    start_dispatcher().await?;
 
-    let generation = sneedov_generate("test");
-    match generation {
-        Ok(gen) => {
-            println!("{}", gen);
-            Ok(())
-        }
-        Err(err) => {
-            eprintln!("Could not generate: {}", err);
-            Err(err)
-        }
-    }
+    Ok(())
 }
