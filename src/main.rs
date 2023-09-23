@@ -29,6 +29,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
             let elapsed = now.elapsed();
             eprintln!("Time elapsed: {:.2?}\n", elapsed);
+
         }
     }
     start_dispatcher().await?;
