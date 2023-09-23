@@ -88,12 +88,13 @@ async fn generate(bot: Bot, msg: Message) -> HandlerResult {
 fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>> {
     use dptree::case;
 
-    let command_handler = teloxide::filter_command::<Command, _>().branch(
-        case![State::Start]
-            .branch(case![Command::Help].endpoint(help))
-            .branch(case![Command::Start].endpoint(start))
-            .branch(case![Command::Markov].endpoint(generate)),
-    );
+    let command_handler = teloxide::filter_command::<Command, _>()
+        .branch(
+            case![State::Start]
+                .branch(case![Command::Help].endpoint(help))
+                .branch(case![Command::Start].endpoint(start)),
+        )
+        .branch(case![State::Listen].branch(case![Command::Markov].endpoint(generate)));
 
     let message_handler = Update::filter_message()
         .branch(command_handler)
