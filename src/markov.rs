@@ -252,9 +252,7 @@ pub fn sneedov_feed(
         //let words = split_sentence!(line);
         //count_adjacent(&words);
         if line != &"" {
-            if let Err(e) = sneedov_append_line(&connection, line) {
-                eprintln!("Error feeding: {}", e);
-            }
+            sneedov_append_line(&connection, line)?;
         }
     }
 
