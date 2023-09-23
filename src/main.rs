@@ -12,18 +12,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             .set_create()
             .set_full_mutex()
             .set_read_write();
-        let path_name = "./test.db";
-        let path = std::path::Path::new(path_name);
-        let connection = sqlite::Connection::open_with_flags(path, flags)?;
 
         let args: Vec<String> = env::args().collect();
         if args.len() > 1 {
             use std::time::Instant;
             let now = Instant::now();
+
+            let path_name = format!("./{d}.db", d = &args[2]);
+            let path = std::path::Path::new(&path_name);
+            let connection = sqlite::Connection::open_with_flags(path, flags)?;
+
             if let Err(e) = sneedov_feed(&args[1], &connection) {
                 eprintln!("Could not feed and seed: {}", e);
                 return Err(e);
             }
+
             let elapsed = now.elapsed();
             eprintln!("Time elapsed: {:.2?}\n", elapsed);
         }
