@@ -64,8 +64,11 @@ async fn listen(bot: Bot, msg: Message) -> HandlerResult {
     Ok(())
 }
 
-async fn start() -> HandlerResult {
-    todo!()
+async fn start(bot: Bot, dialogue: MyDialogue, msg: Message) -> HandlerResult {
+    bot.send_message(msg.chat.id, "Now listening to messages")
+        .await?;
+    dialogue.update(State::Listen).await?;
+    Ok(())
 }
 
 async fn help() -> HandlerResult {
