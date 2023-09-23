@@ -71,8 +71,9 @@ async fn start(bot: Bot, dialogue: MyDialogue, msg: Message) -> HandlerResult {
     Ok(())
 }
 
-async fn help() -> HandlerResult {
-    todo!()
+async fn help(bot: Bot, msg: Message) -> HandlerResult {
+    bot.send_message(msg.chat.id, "Nope!").await?;
+    Ok(())
 }
 
 async fn generate(bot: Bot, msg: Message) -> HandlerResult {
