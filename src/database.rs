@@ -54,7 +54,7 @@ const GET_NEXT_QUERY: &str = "
 pub fn database(
     connection: &sqlite::Connection,
     message: DatabaseMessage,
-) -> Result<DatabaseResult, Box<dyn std::error::Error>> {
+) -> Result<DatabaseResult, Box<dyn std::error::Error + Send + Sync>> {
     // let flags = sqlite::OpenFlags::new()
     //     .set_create()
     //     .set_full_mutex()
