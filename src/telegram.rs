@@ -79,9 +79,18 @@ async fn help(bot: Bot, msg: Message) -> HandlerResult {
 async fn generate(bot: Bot, msg: Message) -> HandlerResult {
     let chat_id = msg.chat.id.0.to_string();
     let database = connect_database(&chat_id)?;
-    let sentence = sneedov_generate(&database)?;
+    let sentence = sneedov_generate(&database);
 
-    bot.send_message(msg.chat.id, sentence).await?;
+    match sentence {
+        Ok(text) => {
+            bot.send_message(msg.chat.id, text).await?;
+        }
+        Err(e) => {
+            eprintln!("{}", e);
+            return Err(e);
+        }
+    }
+
     Ok(())
 }
 
