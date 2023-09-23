@@ -148,6 +148,8 @@ pub fn sneedov_append_word(
     next_keyword: &str,
     next_string: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    set_keywords(&connection)?;
+
     let index1 = add_word(connection, keyword, string)?;
     let index2 = add_word(connection, next_keyword, next_string)?;
 
@@ -159,6 +161,8 @@ pub fn sneedov_append_line(
     connection: &sqlite::Connection,
     line: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    set_keywords(&connection)?;
+
     let split = split_sentence(line.to_owned());
     let iter = split.iter();
 
