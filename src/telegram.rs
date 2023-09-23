@@ -14,8 +14,8 @@ enum Command {
 
 #[derive(Clone, Default)]
 enum State {
+    _Start,
     #[default]
-    Start,
     Listen,
 }
 
@@ -90,7 +90,7 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
 
     let command_handler = teloxide::filter_command::<Command, _>()
         .branch(
-            case![State::Start]
+            case![State::_Start]
                 .branch(case![Command::Help].endpoint(help))
                 .branch(case![Command::Start].endpoint(start)),
         )
