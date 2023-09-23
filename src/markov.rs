@@ -55,7 +55,7 @@ fn increment_next_word(
     connection: &sqlite::Connection,
     index1: usize,
     index2: usize,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     database(connection, DatabaseMessage::Increment(index1, index2))?;
     Ok(())
 }
@@ -63,20 +63,20 @@ fn increment_next_word(
 fn get_occurrences(
     connection: &sqlite::Connection,
     index: usize,
-) -> Result<Vec<(usize, usize)>, Box<dyn std::error::Error>> {
+) -> Result<Vec<(usize, usize)>, Box<dyn std::error::Error + Send + Sync>> {
     if let DatabaseResult::VecTuple(vec) =
         database(&connection, DatabaseMessage::GetNextWords(index))?
     {
         return Ok(vec);
     }
-    let err: Box<dyn std::error::Error> = "Could not get vec!".into();
+    let err: Box<dyn std::error::Error + Send + Sync> = "Could not get vec!".into();
     Err(err)
 }
 
 fn get_word(
     connection: &sqlite::Connection,
     index: usize,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     // let mut split_line = line.split_whitespace();
     // //spli&t_line.next().unwrap().to_owned()
     // if let Some(word) = split_line.next() {
@@ -85,13 +85,15 @@ fn get_word(
     if let DatabaseResult::String(string) = database(connection, DatabaseMessage::GetWord(index))? {
         return Ok(string);
     }
-    let err: Box<dyn std::error::Error> =
+    let err: Box<dyn std::error::Error + Send + Sync> =
         String::from("None was returned. Is your file corrupted or missing?").into();
 
     Err(err)
 }
 
-fn get_next_word(vec: Vec<(usize, usize)>) -> Result<usize, Box<dyn std::error::Error>> {
+fn get_next_word(
+    vec: Vec<(usize, usize)>,
+) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
     let mut rng = thread_rng();
     Ok(vec.choose_weighted(&mut rng, |item| item.1)?.0)
 }
@@ -100,7 +102,7 @@ fn add_word(
     connection: &sqlite::Connection,
     keyword: &str,
     string: &str,
-) -> Result<usize, Box<dyn std::error::Error>> {
+) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
     if let DatabaseResult::Int(id) = database(
         connection,
         DatabaseMessage::AddWord(keyword.to_owned(), string.to_owned()),
@@ -108,7 +110,7 @@ fn add_word(
         return Ok(id);
     }
 
-    let err: Box<dyn std::error::Error> = "Could not return id".into();
+    let err: Box<dyn std::error::Error + Send + Sync> = "Could not return id".into();
     Err(err)
 }
 
@@ -119,7 +121,9 @@ fn is_punctuation(charresult: Result<char, std::char::ParseCharError>) -> bool {
     }
 }
 
-fn set_keywords(connection: &sqlite::Connection) -> Result<(), Box<dyn std::error::Error>> {
+fn set_keywords(
+    connection: &sqlite::Connection,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     if let Err(e1) = add_word(connection, END_KEYWORD, "") {
         return Err(e1);
     }
@@ -143,7 +147,7 @@ pub fn sneedov_append_word(
     string: &str,
     next_keyword: &str,
     next_string: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let index1 = add_word(connection, keyword, string)?;
     let index2 = add_word(connection, next_keyword, next_string)?;
 
@@ -154,7 +158,7 @@ pub fn sneedov_append_word(
 pub fn sneedov_append_line(
     connection: &sqlite::Connection,
     line: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let split = split_sentence(line.to_owned());
     let iter = split.iter();
 
@@ -205,7 +209,7 @@ pub fn sneedov_append_line(
 ///
 pub fn sneedov_generate(
     connection: &sqlite::Connection,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     //code goes here
     let mut index = 2;
     let mut sentence = String::new();
@@ -233,7 +237,7 @@ pub fn sneedov_generate(
 pub fn sneedov_feed(
     old_filename: &str,
     connection: &sqlite::Connection,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let file = OpenOptions::new().read(true).open(old_filename)?;
 
     let mut reader = BufReader::new(&file);
