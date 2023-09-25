@@ -1,6 +1,6 @@
 # Sneedov
 
-Sneedov is a Telegram bot made with the Teloxide crate. 
+Sneedov is a Markov chain Telegram bot made with the Teloxide crate. 
 
 ## Installation guide
 
