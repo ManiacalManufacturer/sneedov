@@ -1,6 +1,8 @@
 use sqlite;
 
 const INIT_QUERY: &str = "
+PRAGMA synchronous = OFF;
+
 CREATE TABLE IF NOT EXISTS Words(
     id INTEGER PRIMARY KEY,
     keyword VARCHAR(20),
