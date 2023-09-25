@@ -7,6 +7,8 @@ use teloxide::dispatching::{dialogue, UpdateHandler};
 use teloxide::prelude::*;
 use teloxide_macros::BotCommands;
 
+pub mod config;
+
 #[derive(BotCommands, Clone)]
 #[command(rename_rule = "lowercase")]
 enum Command {
@@ -22,13 +24,12 @@ enum State {
     Listen,
 }
 
-async fn start_bot() -> Bot {
-    //pretty_env_logger::init();
-
-    Bot::from_env()
+async fn start_bot() -> Result<Bot, Box<dyn std::error::Error + Send + Sync>> {
+    let secret = config::get_secret()?;
+    Ok(Bot::new(secret.token))
 }
 
-fn chance(number: usize) -> bool {
+fn chance(number: u64) -> bool {
     let mut rng = thread_rng();
     if rng.gen_range(1..number) == 1 {
         return true;
@@ -41,8 +42,13 @@ fn connect_database(chat_id: &str) -> Result<SqliteDB, Box<dyn std::error::Error
         .set_create()
         .set_full_mutex()
         .set_read_write();
-    let path_name = format!("./{d}.db", d = chat_id);
+
+    let dir_name = format!("./{}/", chat_id);
+    let path_name = format!("./{}/model.db", chat_id);
     let path = std::path::Path::new(&path_name);
+    let dir = std::path::Path::new(&dir_name);
+
+    std::fs::create_dir_all(dir)?;
     let database = SqliteDB::new(path, flags)?;
 
     Ok(database)
@@ -61,9 +67,13 @@ async fn listen(bot: Bot, msg: Message) -> HandlerResult {
     }
 
     let database = connect_database(&chat_id)?;
+    let config = config::get_config(&chat_id)?;
 
-    if chance(10) {
-        let sentence = Markov::new(Box::new(database))?.generate()?;
+    if chance(config.chance.unwrap()) {
+        let sentence = Markov::builder(Box::new(database))
+            .markov_type(config.markov_type)
+            .build()?
+            .generate()?;
         bot.send_message(msg.chat.id, sentence).await?;
     }
 
@@ -85,8 +95,12 @@ async fn help(bot: Bot, msg: Message) -> HandlerResult {
 async fn generate(bot: Bot, msg: Message) -> HandlerResult {
     let chat_id = msg.chat.id.0.to_string();
     let database = connect_database(&chat_id)?;
+    let config = config::get_config(&chat_id)?;
 
-    let sentence = Markov::new(Box::new(database))?.generate();
+    let sentence = Markov::builder(Box::new(database))
+        .markov_type(config.markov_type)
+        .build()?
+        .generate();
 
     match sentence {
         Ok(text) => {
@@ -120,7 +134,7 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
 }
 
 pub async fn start_dispatcher() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let bot = start_bot().await;
+    let bot = start_bot().await?;
 
     Dispatcher::builder(bot, schema())
         .dependencies(dptree::deps![dialogue::InMemStorage::<State>::new()])

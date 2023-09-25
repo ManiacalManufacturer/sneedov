@@ -20,18 +20,22 @@ const END_KEYWORD: (&str, &str) = ("end", "");
 const START_INDEX: u64 = 2;
 const END_INDEX: u64 = 1;
 
-const HYBRID_THRESHOLD: u64 = 10;
+const DEFAULT_HYBRID_THRESHOLD: u64 = 10;
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 
-#[derive(Default)]
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", content = "hybrid-threshold")]
 pub enum MarkovType {
     Single,
     Double,
-    #[default]
-    Hybrid,
+    Hybrid(u64),
+}
+
+impl Default for MarkovType {
+    fn default() -> Self {
+        MarkovType::Hybrid(DEFAULT_HYBRID_THRESHOLD)
+    }
 }
 
 pub struct Markov {
@@ -40,16 +44,52 @@ pub struct Markov {
     generation: String,
 }
 
+pub struct MarkovBuilder {
+    database: Box<dyn Database>,
+    markov_type: MarkovType,
+    generation: String,
+}
+
+impl MarkovBuilder {
+    pub fn new(database: Box<dyn Database>) -> MarkovBuilder {
+        MarkovBuilder {
+            database,
+            markov_type: MarkovType::default(),
+            generation: String::new(),
+        }
+    }
+
+    pub fn markov_type(mut self, markov_type: MarkovType) -> MarkovBuilder {
+        self.markov_type = markov_type;
+        self
+    }
+
+    pub fn build(self) -> Result<Markov, Error> {
+        self.database.add_word(END_KEYWORD)?;
+        self.database.add_word(START_KEYWORD)?;
+
+        Ok(Markov {
+            database: self.database,
+            markov_type: self.markov_type,
+            generation: self.generation,
+        })
+    }
+}
+
 impl Markov {
     pub fn new(database: Box<dyn Database>) -> Result<Self, Error> {
         let markov = Markov {
             database,
-            markov_type: MarkovType::Hybrid,
+            markov_type: MarkovType::default(),
             generation: String::new(),
         };
         markov.database.add_word(END_KEYWORD)?;
         markov.database.add_word(START_KEYWORD)?;
         Ok(markov)
+    }
+
+    pub fn builder(database: Box<dyn Database>) -> MarkovBuilder {
+        MarkovBuilder::new(database)
     }
 
     pub fn append_line(&self, line: String) -> Result<(), Error> {
@@ -96,10 +136,10 @@ impl Markov {
                 let vec = self.database.get_double_occurrences(index1, index2)?;
                 Ok(vec.choose_weighted(&mut rng, |item| item.1)?.0)
             }
-            MarkovType::Hybrid => {
+            MarkovType::Hybrid(t) => {
                 let vec = self.database.get_double_occurrences(index1, index2)?;
                 let result = vec.choose_weighted(&mut rng, |item| item.1)?;
-                if result.1 < HYBRID_THRESHOLD {
+                if result.1 < t {
                     let vec = self.database.get_single_occurrences(index2)?;
                     Ok(vec.choose_weighted(&mut rng, |item| item.1)?.0)
                 } else {
