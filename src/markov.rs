@@ -1,6 +1,8 @@
 use super::database::Database;
 use super::split::{is_punctuation, split_sentence};
 
+use serde::{Deserialize, Serialize};
+
 use indicatif::ProgressIterator;
 use itertools::{Itertools, Position};
 use rand::prelude::*;
@@ -23,6 +25,8 @@ const HYBRID_THRESHOLD: u64 = 10;
 type Error = Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(Default)]
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "type", content = "hybrid-threshold")]
 pub enum MarkovType {
     Single,
     Double,
