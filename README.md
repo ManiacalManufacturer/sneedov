@@ -15,5 +15,5 @@ cargo build --release
 ```
 4. Create a secret.toml file with the following
 ```
-token = " [YOUR TELEGRAM BOT TOKEN] "
+token = "[YOUR TELEGRAM BOT TOKEN]"
 ```
