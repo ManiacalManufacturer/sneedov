@@ -9,6 +9,9 @@ use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::io::BufReader;
 
+mod split;
+use split::split_sentence;
+
 const START_KEYWORD: (&str, &str) = ("start", "");
 const END_KEYWORD: (&str, &str) = ("end", "");
 
