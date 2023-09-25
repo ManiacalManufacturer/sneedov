@@ -143,25 +143,24 @@ impl Markov {
     }
 }
 
-pub fn sneedov_feed(
-    old_filename: &str,
-    connection: &sqlite::Connection,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let file = OpenOptions::new().read(true).open(old_filename)?;
+pub fn sneedov_feed(filename: &str, database: Box<dyn Database>) -> Result<(), Error> {
+    let file = OpenOptions::new().read(true).open(filename)?;
 
     let mut reader = BufReader::new(&file);
     let mut string = String::new();
 
-    set_keywords(&connection)?;
-
     let _ = reader.read_to_string(&mut string);
     let vec: Vec<&str> = string.split("\n").collect();
     let iter = vec.iter();
+
+    let markov = Markov::new(database)?;
+
     for line in iter.progress() {
         //let words = split_sentence!(line);
         //count_adjacent(&words);
         if line != &"" {
-            sneedov_append_line(&connection, line)?;
+            //sneedov_append_line(&connection, line)?;
+            markov.append_line(line.to_string())?;
         }
     }
 

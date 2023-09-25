@@ -1,5 +1,8 @@
-use super::markov::{sneedov_append_line, sneedov_generate};
+use super::database::SqliteDB;
+use super::markov::Markov;
+
 use rand::{thread_rng, Rng};
+
 use teloxide::dispatching::{dialogue, UpdateHandler};
 use teloxide::prelude::*;
 use teloxide_macros::BotCommands;
@@ -33,16 +36,16 @@ fn chance(number: usize) -> bool {
     false
 }
 
-fn connect_database(chat_id: &str) -> Result<sqlite::Connection, sqlite::Error> {
+fn connect_database(chat_id: &str) -> Result<SqliteDB, Box<dyn std::error::Error + Send + Sync>> {
     let flags = sqlite::OpenFlags::new()
         .set_create()
         .set_full_mutex()
         .set_read_write();
     let path_name = format!("./{d}.db", d = chat_id);
     let path = std::path::Path::new(&path_name);
-    let connection = sqlite::Connection::open_with_flags(path, flags)?;
+    let database = SqliteDB::new(path, flags)?;
 
-    Ok(connection)
+    Ok(database)
 }
 
 type MyDialogue = Dialogue<State, dialogue::InMemStorage<State>>;
@@ -53,11 +56,14 @@ async fn listen(bot: Bot, msg: Message) -> HandlerResult {
     let database = connect_database(&chat_id)?;
 
     if let Some(text) = msg.text() {
-        sneedov_append_line(&database, text)?;
+        //markov.append_line(text.into())?;
+        Markov::new(Box::new(database))?.append_line(text.to_string())?;
     }
 
+    let database = connect_database(&chat_id)?;
+
     if chance(10) {
-        let sentence = sneedov_generate(&database)?;
+        let sentence = Markov::new(Box::new(database))?.generate()?;
         bot.send_message(msg.chat.id, sentence).await?;
     }
 
@@ -79,7 +85,8 @@ async fn help(bot: Bot, msg: Message) -> HandlerResult {
 async fn generate(bot: Bot, msg: Message) -> HandlerResult {
     let chat_id = msg.chat.id.0.to_string();
     let database = connect_database(&chat_id)?;
-    let sentence = sneedov_generate(&database);
+
+    let sentence = Markov::new(Box::new(database))?.generate();
 
     match sentence {
         Ok(text) => {

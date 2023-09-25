@@ -2,6 +2,7 @@
 
 use std::env;
 
+use sneedov::database::SqliteDB;
 use sneedov::markov::sneedov_feed;
 use sneedov::telegram::start_dispatcher;
 
@@ -20,16 +21,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
             let path_name = format!("./{d}.db", d = &args[2]);
             let path = std::path::Path::new(&path_name);
-            let connection = sqlite::Connection::open_with_flags(path, flags)?;
+            let database = SqliteDB::new(path, flags)?;
 
-            if let Err(e) = sneedov_feed(&args[1], &connection) {
+            if let Err(e) = sneedov_feed(&args[1], Box::new(database)) {
                 eprintln!("Could not feed and seed: {}", e);
                 return Err(e);
             }
 
             let elapsed = now.elapsed();
             eprintln!("Time elapsed: {:.2?}\n", elapsed);
-
         }
     }
     start_dispatcher().await?;
