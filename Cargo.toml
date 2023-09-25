@@ -1,6 +1,6 @@
 [package]
 name = "sneedov"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -13,3 +13,5 @@ itertools = "0.11.0"
 teloxide = "0.12.2"
 teloxide-macros = "0.7.1"
 tokio = { version = "1.32.0", features = ["full"] }
+toml = { version = "0.8.0", features = ["display", "parse"] }
+serde = "1.0.188"

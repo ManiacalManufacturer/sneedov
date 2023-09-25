@@ -1,123 +1,152 @@
 use sqlite;
 
-pub enum DatabaseMessage {
-    AddWord(String, String),
-    Increment(usize, usize),
-    GetWord(usize),
-    GetNextWords(usize),
-}
-
-pub enum DatabaseResult {
-    None,
-    Int(usize),
-    String(String),
-    VecTuple(Vec<(usize, usize)>),
-}
-
 const INIT_QUERY: &str = "
-    CREATE TABLE IF NOT EXISTS Words(
-        id INTEGER PRIMARY KEY,
-        keyword VARCHAR(20),
-        string VARCHAR(255),
-        UNIQUE(keyword,string)
+CREATE TABLE IF NOT EXISTS Words(
+    id INTEGER PRIMARY KEY,
+    keyword VARCHAR(20),
+    string VARCHAR(255),
+    UNIQUE(keyword,string)
     );
 
-    CREATE TABLE IF NOT EXISTS Occurrence (
-        index1 INT NOT NULL,
-        index2 INT NOT NULL,
-        occurrences INT,
-        UNIQUE(index1, index2)
+CREATE TABLE IF NOT EXISTS Occurrence (
+    prev INT NOT NULL,
+    curr INT NOT NULL,
+    next INT NOT NULL,
+    occurrences INT,
+    UNIQUE(prev, curr, next)
     );
-";
+    ";
 
 const ADD_QUERY: &str = "
     INSERT OR IGNORE INTO Words (id, keyword, string) VALUES(
         null,
         :keyword,
         :string
-    );
-";
+        );
+    ";
 
 const INCREMENT_QUERY: &str = "
-    INSERT INTO Occurrence (index1, index2, occurrences) VALUES(:index1, :index2, 1)
-    ON CONFLICT(index1, index2) DO UPDATE SET occurrences = occurrences + 1;
-";
+INSERT INTO Occurrence (prev, curr, next, occurrences) VALUES(:index1, :index2, :index3, 1)
+    ON CONFLICT(prev, curr, next) DO UPDATE SET occurrences = occurrences + 1;
+    ";
 
 const GET_QUERY: &str = "
-        SELECT string FROM Words WHERE id = :id;
-";
+    SELECT string FROM Words WHERE id = :id;
+    ";
 
-const GET_NEXT_QUERY: &str = "
-         SELECT * FROM Occurrence WHERE index1 = :index1;
-";
+const SINGLE_NEXT_QUERY: &str = "
+    SELECT * FROM Occurrence WHERE curr = :index2;
+    ";
 
-pub fn database(
-    connection: &sqlite::Connection,
-    message: DatabaseMessage,
-) -> Result<DatabaseResult, Box<dyn std::error::Error + Send + Sync>> {
-    // let flags = sqlite::OpenFlags::new()
-    //     .set_create()
-    //     .set_full_mutex()
-    //     .set_read_write();
-    // let path_name = &format!("./{}.db", database);
-    // let path = std::path::Path::new(path_name);
-    // let connection = sqlite::Connection::open_with_flags(path, flags)?;
+const DOUBLE_NEXT_QUERY: &str = "
+    SELECT * FROM Occurrence WHERE prev = :index1 AND curr = :index2;
+    ";
 
-    connection.execute(INIT_QUERY)?;
+type Error = Box<dyn std::error::Error + Send + Sync>;
 
-    match message {
-        DatabaseMessage::AddWord(a, b) => {
-            let mut statement = connection.prepare(ADD_QUERY)?;
-            statement.bind_iter::<_, (_, sqlite::Value)>([
-                (":keyword", a.clone().into()),
-                (":string", b.clone().into()),
-            ])?;
+pub struct SqliteDB {
+    database: sqlite::Connection,
+}
 
-            while let Ok(sqlite::State::Row) = statement.next() {}
+impl SqliteDB {
+    pub fn new(path: &std::path::Path, flags: sqlite::OpenFlags) -> Result<Self, Error> {
+        let db = SqliteDB {
+            database: sqlite::Connection::open_with_flags(path, flags)?,
+        };
+        db.database.execute(INIT_QUERY)?;
+        Ok(db)
+    }
+}
 
-            let mut statement = connection
-                .prepare("SELECT id FROM Words WHERE keyword = :keyword AND string = :string")?;
-            statement.bind_iter::<_, (_, sqlite::Value)>([
-                (":keyword", a.into()),
-                (":string", b.into()),
-            ])?;
+pub trait Database {
+    fn add_word(&self, tuple: (&str, &str)) -> Result<u64, Error>;
 
-            let mut id: i64 = 0;
-            while let Ok(sqlite::State::Row) = statement.next() {
-                id = statement.read::<i64, _>("id").unwrap();
-            }
+    fn increment(&self, index1: u64, index2: u64, index3: u64) -> Result<(), Error>;
 
-            return Ok(DatabaseResult::Int(id as usize));
+    fn get_word(&self, index: u64) -> Result<String, Error>;
+
+    fn get_single_occurrences(&self, index: u64) -> Result<Vec<(u64, u64)>, Error>;
+
+    fn get_double_occurrences(&self, index1: u64, index2: u64) -> Result<Vec<(u64, u64)>, Error>;
+}
+
+impl Database for SqliteDB {
+    fn add_word(&self, tuple: (&str, &str)) -> Result<u64, Error> {
+        let mut statement = self.database.prepare(ADD_QUERY)?;
+
+        statement.bind_iter::<_, (_, sqlite::Value)>([
+            (":keyword", tuple.0.clone().into()),
+            (":string", tuple.1.clone().into()),
+        ])?;
+
+        while let Ok(sqlite::State::Row) = statement.next() {}
+
+        let mut statement = self
+            .database
+            .prepare("SELECT id FROM Words WHERE keyword = :keyword AND string = :string")?;
+        statement.bind_iter::<_, (_, sqlite::Value)>([
+            (":keyword", tuple.0.into()),
+            (":string", tuple.1.into()),
+        ])?;
+
+        let mut id: i64 = 0;
+        while let Ok(sqlite::State::Row) = statement.next() {
+            id = statement.read::<i64, _>("id").unwrap();
         }
-        DatabaseMessage::Increment(a, b) => {
-            let mut statement = connection.prepare(INCREMENT_QUERY)?;
-            statement.bind_iter::<_, (_, i64)>([(":index1", a as i64), (":index2", b as i64)])?;
-            while let Ok(sqlite::State::Row) = statement.next() {}
-        }
-        DatabaseMessage::GetWord(a) => {
-            let mut statement = connection.prepare(GET_QUERY)?;
-            statement.bind((":id", a as i64))?;
 
-            if let Ok(sqlite::State::Row) = statement.next() {
-                return Ok(DatabaseResult::String(
-                    statement.read::<String, _>("string").unwrap(),
-                ));
-            }
-        }
-        DatabaseMessage::GetNextWords(a) => {
-            let mut statement = connection.prepare(GET_NEXT_QUERY)?;
-            statement.bind((":index1", a as i64))?;
+        return Ok(id as u64);
+    }
 
-            let mut vec: Vec<(usize, usize)> = vec![];
-            while let Ok(sqlite::State::Row) = statement.next() {
-                vec.push((
-                    statement.read::<i64, _>("index2").unwrap() as usize,
-                    statement.read::<i64, _>("occurrences").unwrap() as usize,
-                ));
-            }
-            return Ok(DatabaseResult::VecTuple(vec));
-        }
-    };
+    fn increment(&self, index1: u64, index2: u64, index3: u64) -> Result<(), Error> {
+        let mut statement = self.database.prepare(INCREMENT_QUERY)?;
+        statement.bind_iter::<_, (_, i64)>([
+            (":index1", index1 as i64),
+            (":index2", index2 as i64),
+            (":index3", index3 as i64),
+        ])?;
+        while let Ok(sqlite::State::Row) = statement.next() {}
+        Ok(())
+    }
 
-    Ok(DatabaseResult::None)
+    fn get_word(&self, index: u64) -> Result<String, Error> {
+        let mut statement = self.database.prepare(GET_QUERY)?;
+        statement.bind((":id", index as i64))?;
+
+        if let Ok(sqlite::State::Row) = statement.next() {
+            Ok(statement.read::<String, _>("string")?)
+        } else {
+            let err: Error =
+                String::from("None was returned. Is your file corrupted or missing?").into();
+            Err(err)
+        }
+    }
+
+    fn get_single_occurrences(&self, index: u64) -> Result<Vec<(u64, u64)>, Error> {
+        let mut statement = self.database.prepare(SINGLE_NEXT_QUERY)?;
+        statement.bind((":index2", index as i64))?;
+
+        let mut vec: Vec<(u64, u64)> = vec![];
+        while let Ok(sqlite::State::Row) = statement.next() {
+            vec.push((
+                statement.read::<i64, _>("next").unwrap() as u64,
+                statement.read::<i64, _>("occurrences").unwrap() as u64,
+            ));
+        }
+        Ok(vec)
+    }
+
+    fn get_double_occurrences(&self, index1: u64, index2: u64) -> Result<Vec<(u64, u64)>, Error> {
+        let mut statement = self.database.prepare(DOUBLE_NEXT_QUERY)?;
+        statement
+            .bind_iter::<_, (_, i64)>([(":index1", index1 as i64), (":index2", index2 as i64)])?;
+
+        let mut vec: Vec<(u64, u64)> = vec![];
+        while let Ok(sqlite::State::Row) = statement.next() {
+            vec.push((
+                statement.read::<i64, _>("next").unwrap() as u64,
+                statement.read::<i64, _>("occurrences").unwrap() as u64,
+            ));
+        }
+        Ok(vec)
+    }
 }
