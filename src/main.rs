@@ -19,7 +19,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             use std::time::Instant;
             let now = Instant::now();
 
-            let path_name = format!("./{d}.db", d = &args[2]);
+            let path_name = format!("./{d}/model.db", d = &args[2]);
             let path = std::path::Path::new(&path_name);
             let database = SqliteDB::new(path, flags)?;
 
