@@ -1,18 +1,16 @@
 use super::database::Database;
-use super::split::{is_punctuation, split_sentence};
-
-use serde::{Deserialize, Serialize};
 
 use indicatif::ProgressIterator;
 use itertools::{Itertools, Position};
 use rand::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::io::BufReader;
 
-mod split;
-use split::split_sentence;
+pub mod split;
+use split::{is_punctuation, split_sentence};
 
 const START_KEYWORD: (&str, &str) = ("start", "");
 const END_KEYWORD: (&str, &str) = ("end", "");
