@@ -1,13 +1,13 @@
 use super::database::Database;
 
-use indicatif::ProgressIterator;
-use itertools::{Itertools, Position};
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use futures::future::try_join_all;
+use futures::stream::{futures_unordered::FuturesUnordered, StreamExt};
 use std::fs::OpenOptions;
-use std::io::prelude::*;
-use std::io::BufReader;
+use std::io::{prelude::*, BufReader};
+use std::sync::Arc;
 
 pub mod split;
 use split::{is_punctuation, split_sentence};
@@ -32,28 +32,27 @@ pub enum MarkovType {
 
 impl Default for MarkovType {
     fn default() -> Self {
-        MarkovType::Hybrid(DEFAULT_HYBRID_THRESHOLD)
+        MarkovType::Hybrid(DEFAULT_HYBRID_THRESHOLD.into())
     }
 }
 
+type DatabaseType = Arc<dyn Database + Send + Sync>;
+
 pub struct Markov {
-    database: Box<dyn Database>,
+    database: DatabaseType,
     markov_type: MarkovType,
-    generation: String,
 }
 
 pub struct MarkovBuilder {
-    database: Box<dyn Database>,
+    database: DatabaseType,
     markov_type: MarkovType,
-    generation: String,
 }
 
 impl MarkovBuilder {
-    pub fn new(database: Box<dyn Database>) -> MarkovBuilder {
+    pub fn new(database: DatabaseType) -> MarkovBuilder {
         MarkovBuilder {
             database,
             markov_type: MarkovType::default(),
-            generation: String::new(),
         }
     }
 
@@ -62,133 +61,142 @@ impl MarkovBuilder {
         self
     }
 
-    pub fn build(self) -> Result<Markov, Error> {
-        self.database.add_word(END_KEYWORD)?;
-        self.database.add_word(START_KEYWORD)?;
-
+    pub async fn build(self) -> Result<Markov, Error> {
+        self.database.add_word(END_KEYWORD).await?;
+        self.database.add_word(START_KEYWORD).await?;
         Ok(Markov {
             database: self.database,
             markov_type: self.markov_type,
-            generation: self.generation,
         })
     }
 }
 
 impl Markov {
-    pub fn new(database: Box<dyn Database>) -> Result<Self, Error> {
+    pub async fn new(database: DatabaseType) -> Result<Self, Error> {
         let markov = Markov {
             database,
             markov_type: MarkovType::default(),
-            generation: String::new(),
         };
-        markov.database.add_word(END_KEYWORD)?;
-        markov.database.add_word(START_KEYWORD)?;
+
+        markov.database.add_word(END_KEYWORD).await?;
+        markov.database.add_word(START_KEYWORD).await?;
         Ok(markov)
     }
 
-    pub fn builder(database: Box<dyn Database>) -> MarkovBuilder {
+    pub fn builder(database: DatabaseType) -> MarkovBuilder {
         MarkovBuilder::new(database)
     }
 
-    pub fn append_line(&self, line: String) -> Result<(), Error> {
+    pub async fn append_line(&self, line: String) -> Result<(), Error> {
         let split = split_sentence(line);
-        let iter = split.iter();
 
-        let (mut prev_key, mut prev_word) = START_KEYWORD;
-        let (mut curr_key, mut curr_word) = START_KEYWORD;
+        let (mut prev, mut curr) = (START_KEYWORD, START_KEYWORD);
+        let mut next = START_KEYWORD;
 
-        for word in iter.with_position() {
-            match word {
-                (Position::First, w) => {
-                    self.append_word((prev_key, prev_word), (curr_key, curr_word), ("first", w))?;
-                    (curr_key, curr_word) = ("first", w);
+        let length = split.len();
+        let mut index = 0;
+
+        let mut futures = split
+            .iter()
+            .map(|word| {
+                index += 1;
+                prev = curr;
+                curr = next;
+                if index == length {
+                    next = ("last", word);
+                } else if index == 1 {
+                    next = ("first", word);
+                } else {
+                    next = ("middle", word);
                 }
-                (Position::Middle, w) => {
-                    self.append_word((prev_key, prev_word), (curr_key, curr_word), ("middle", w))?;
-                    (prev_key, prev_word) = (curr_key, curr_word);
-                    (curr_key, curr_word) = ("middle", w);
-                }
-                (Position::Last, w) => {
-                    self.append_word((prev_key, prev_word), (curr_key, curr_word), ("last", w))?;
-                    self.append_word((curr_key, curr_word), ("last", w), END_KEYWORD)?;
-                }
-                (Position::Only, w) => {
-                    self.append_word(START_KEYWORD, START_KEYWORD, ("last", w))?;
-                    self.append_word(START_KEYWORD, ("last", w), END_KEYWORD)?;
-                }
-            }
+                self.append_word(prev, curr, next)
+            })
+            .collect::<FuturesUnordered<_>>();
+
+        futures.push(self.append_word(curr, next, END_KEYWORD));
+        while let Some(res) = futures.next().await {
+            res?;
         }
-
         Ok(())
     }
 
-    fn next_word(&self, index1: u64, index2: u64) -> Result<u64, Error> {
-        let mut rng = thread_rng();
+    async fn next_word(&self, index1: u64, index2: u64) -> Result<u64, Error> {
+        let mut result;
 
         match self.markov_type {
             MarkovType::Single => {
-                let vec = self.database.get_single_occurrences(index2)?;
-                Ok(vec.choose_weighted(&mut rng, |item| item.1)?.0)
+                let vec = self.database.get_single_occurrences(index2).await?;
+                let mut rng = thread_rng();
+                result = vec.choose_weighted(&mut rng, |item| item.1)?.0;
             }
             MarkovType::Double => {
-                let vec = self.database.get_double_occurrences(index1, index2)?;
-                Ok(vec.choose_weighted(&mut rng, |item| item.1)?.0)
+                let vec = self.database.get_double_occurrences(index1, index2).await?;
+                let mut rng = thread_rng();
+                result = vec.choose_weighted(&mut rng, |item| item.1)?.0;
             }
             MarkovType::Hybrid(t) => {
-                let vec = self.database.get_double_occurrences(index1, index2)?;
-                let result = vec.choose_weighted(&mut rng, |item| item.1)?;
-                if result.1 < t {
-                    let vec = self.database.get_single_occurrences(index2)?;
-                    Ok(vec.choose_weighted(&mut rng, |item| item.1)?.0)
-                } else {
-                    Ok(result.0)
+                let vec = self.database.get_double_occurrences(index1, index2).await?;
+                {
+                    let mut rng = thread_rng();
+                    result = vec.choose_weighted(&mut rng, |item| item.1)?.0;
+                }
+                if result < t {
+                    let vec = self.database.get_single_occurrences(index2).await?;
+                    let mut rng = thread_rng();
+                    result = vec.choose_weighted(&mut rng, |item| item.1)?.0;
                 }
             }
         }
+
+        Ok(result)
+    }
+    async fn get_word(&self, index: u64) -> Result<String, Error> {
+        Ok(self.database.get_word(index).await?)
     }
 
-    pub fn generate(&mut self) -> Result<String, Error> {
+    pub async fn generate(&mut self) -> Result<String, Error> {
         let mut index = START_INDEX;
         let mut old_index = index;
+        let mut sentence = String::new();
 
         loop {
-            (old_index, index) = (index, self.next_word(old_index, index)?);
+            (old_index, index) = (index, self.next_word(old_index, index).await?);
 
             if index == END_INDEX {
                 break;
             }
 
-            let word = self.database.get_word(index)?;
+            let word = self.get_word(index).await?;
             let is_punc = is_punctuation(word.parse::<char>());
 
-            if self.generation.len() != 0 && !is_punc {
-                self.generation.push_str(" ");
+            if sentence.len() != 0 && !is_punc {
+                sentence.push_str(" ");
             }
 
-            self.generation.push_str(&word);
+            sentence.push_str(&word);
         }
 
-        let sentence = &self.generation;
-        Ok(sentence.to_string())
+        Ok(sentence)
     }
 
-    fn append_word(
+    async fn append_word(
         &self,
         prev: (&str, &str),
         curr: (&str, &str),
         next: (&str, &str),
     ) -> Result<(), Error> {
-        let (index1, index2, index3) = (
-            self.database.add_word(prev)?,
-            self.database.add_word(curr)?,
-            self.database.add_word(next)?,
-        );
-
-        self.database.increment(index1, index2, index3)
+        let vec = try_join_all(vec![
+            self.database.add_word(prev),
+            self.database.add_word(curr),
+            self.database.add_word(next),
+        ])
+        .await?;
+        self.database.increment(vec[0], vec[1], vec[2]).await?;
+        Ok(())
     }
 }
 
-pub fn sneedov_feed(filename: &str, database: Box<dyn Database>) -> Result<(), Error> {
+pub async fn sneedov_feed(filename: &str, database: DatabaseType) -> Result<(), Error> {
     let file = OpenOptions::new().read(true).open(filename)?;
 
     let mut reader = BufReader::new(&file);
@@ -196,17 +204,20 @@ pub fn sneedov_feed(filename: &str, database: Box<dyn Database>) -> Result<(), E
 
     let _ = reader.read_to_string(&mut string);
     let vec: Vec<&str> = string.split("\n").collect();
-    let iter = vec.iter();
 
-    let markov = Markov::new(database)?;
+    let markov = Markov::new(database).await?;
 
-    for line in iter.progress() {
-        //let words = split_sentence!(line);
-        //count_adjacent(&words);
-        if line != &"" {
-            //sneedov_append_line(&connection, line)?;
-            markov.append_line(line.to_string())?;
-        }
+    let length = vec.len() as u64;
+    let bar = indicatif::ProgressBar::new(length);
+
+    let mut futures = vec
+        .iter()
+        .filter(|x| if *x != &"" { true } else { false })
+        .map(|x| markov.append_line(x.to_string()));
+
+    while let Some(res) = futures.next() {
+        res.await?;
+        bar.inc(1);
     }
 
     Ok(())
