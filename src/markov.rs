@@ -122,6 +122,7 @@ impl Markov {
 
     async fn next_word(&self, index1: u64, index2: u64) -> Result<u64, Error> {
         let mut result;
+        let hybrid;
 
         match self.markov_type {
             MarkovType::Single => {
@@ -138,9 +139,11 @@ impl Markov {
                 let vec = self.database.get_double_occurrences(index1, index2).await?;
                 {
                     let mut rng = thread_rng();
-                    result = vec.choose_weighted(&mut rng, |item| item.1)?.0;
+                    let tuple = vec.choose_weighted(&mut rng, |item| item.1)?;
+                    result = tuple.0;
+                    hybrid = tuple.1;
                 }
-                if result < t {
+                if hybrid < t {
                     let vec = self.database.get_single_occurrences(index2).await?;
                     let mut rng = thread_rng();
                     result = vec.choose_weighted(&mut rng, |item| item.1)?.0;
