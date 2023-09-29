@@ -2,6 +2,7 @@ use super::database::SqliteDB;
 use super::markov::Markov;
 
 use rand::{thread_rng, Rng};
+use std::sync::Arc;
 
 use teloxide::dispatching::{dialogue, UpdateHandler};
 use teloxide::prelude::*;
@@ -37,19 +38,16 @@ fn chance(number: u64) -> bool {
     false
 }
 
-fn connect_database(chat_id: &str) -> Result<SqliteDB, Box<dyn std::error::Error + Send + Sync>> {
-    let flags = sqlite::OpenFlags::new()
-        .set_create()
-        .set_full_mutex()
-        .set_read_write();
-
+async fn connect_database(
+    chat_id: &str,
+) -> Result<SqliteDB, Box<dyn std::error::Error + Send + Sync>> {
     let dir_name = format!("./{}/", chat_id);
     let path_name = format!("./{}/model.db", chat_id);
     let path = std::path::Path::new(&path_name);
     let dir = std::path::Path::new(&dir_name);
 
     std::fs::create_dir_all(dir)?;
-    let database = SqliteDB::new(path, flags)?;
+    let database = SqliteDB::new(path).await?;
 
     Ok(database)
 }
@@ -59,21 +57,25 @@ type HandlerResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
 async fn listen(bot: Bot, msg: Message) -> HandlerResult {
     let chat_id = msg.chat.id.0.to_string();
-    let database = connect_database(&chat_id)?;
+    let database = connect_database(&chat_id).await?;
 
     if let Some(text) = msg.text() {
-        //markov.append_line(text.into())?;
-        Markov::new(Box::new(database))?.append_line(text.to_string())?;
+        Markov::new(Arc::new(database))
+            .await?
+            .append_line(text.to_string())
+            .await?;
     }
 
-    let database = connect_database(&chat_id)?;
+    let database = connect_database(&chat_id).await?;
     let config = config::get_config(&chat_id)?;
 
     if chance(config.chance.unwrap()) {
-        let sentence = Markov::builder(Box::new(database))
+        let sentence = Markov::builder(Arc::new(database))
             .markov_type(config.markov_type)
-            .build()?
-            .generate()?;
+            .build()
+            .await?
+            .generate()
+            .await?;
         bot.send_message(msg.chat.id, sentence).await?;
     }
 
@@ -94,13 +96,15 @@ async fn help(bot: Bot, msg: Message) -> HandlerResult {
 
 async fn generate(bot: Bot, msg: Message) -> HandlerResult {
     let chat_id = msg.chat.id.0.to_string();
-    let database = connect_database(&chat_id)?;
+    let database = connect_database(&chat_id).await?;
     let config = config::get_config(&chat_id)?;
 
-    let sentence = Markov::builder(Box::new(database))
+    let sentence = Markov::builder(Arc::new(database))
         .markov_type(config.markov_type)
-        .build()?
-        .generate();
+        .build()
+        .await?
+        .generate()
+        .await;
 
     match sentence {
         Ok(text) => {

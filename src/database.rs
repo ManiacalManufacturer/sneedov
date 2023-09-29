@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use sqlite;
 
 const INIT_QUERY: &str = "
@@ -47,34 +48,40 @@ const DOUBLE_NEXT_QUERY: &str = "
 type Error = Box<dyn std::error::Error + Send + Sync>;
 
 pub struct SqliteDB {
-    database: sqlite::Connection,
+    connection: sqlite::ConnectionWithFullMutex,
 }
 
 impl SqliteDB {
-    pub fn new(path: &std::path::Path, flags: sqlite::OpenFlags) -> Result<Self, Error> {
+    pub async fn new(path: &std::path::Path) -> Result<Self, Error> {
         let db = SqliteDB {
-            database: sqlite::Connection::open_with_flags(path, flags)?,
+            connection: sqlite::Connection::open_with_full_mutex(path)?,
         };
-        db.database.execute(INIT_QUERY)?;
+        db.connection.execute(INIT_QUERY)?;
         Ok(db)
     }
 }
 
+#[async_trait]
 pub trait Database {
-    fn add_word(&self, tuple: (&str, &str)) -> Result<u64, Error>;
+    async fn add_word(&self, tuple: (&str, &str)) -> Result<u64, Error>;
 
-    fn increment(&self, index1: u64, index2: u64, index3: u64) -> Result<(), Error>;
+    async fn increment(&self, index1: u64, index2: u64, index3: u64) -> Result<(), Error>;
 
-    fn get_word(&self, index: u64) -> Result<String, Error>;
+    async fn get_word(&self, index: u64) -> Result<String, Error>;
 
-    fn get_single_occurrences(&self, index: u64) -> Result<Vec<(u64, u64)>, Error>;
+    async fn get_single_occurrences(&self, index: u64) -> Result<Vec<(u64, u64)>, Error>;
 
-    fn get_double_occurrences(&self, index1: u64, index2: u64) -> Result<Vec<(u64, u64)>, Error>;
+    async fn get_double_occurrences(
+        &self,
+        index1: u64,
+        index2: u64,
+    ) -> Result<Vec<(u64, u64)>, Error>;
 }
 
+#[async_trait]
 impl Database for SqliteDB {
-    fn add_word(&self, tuple: (&str, &str)) -> Result<u64, Error> {
-        let mut statement = self.database.prepare(ADD_QUERY)?;
+    async fn add_word(&self, tuple: (&str, &str)) -> Result<u64, Error> {
+        let mut statement = self.connection.prepare(ADD_QUERY)?;
 
         statement.bind_iter::<_, (_, sqlite::Value)>([
             (":keyword", tuple.0.clone().into()),
@@ -84,7 +91,7 @@ impl Database for SqliteDB {
         while let Ok(sqlite::State::Row) = statement.next() {}
 
         let mut statement = self
-            .database
+            .connection
             .prepare("SELECT id FROM Words WHERE keyword = :keyword AND string = :string")?;
         statement.bind_iter::<_, (_, sqlite::Value)>([
             (":keyword", tuple.0.into()),
@@ -99,8 +106,8 @@ impl Database for SqliteDB {
         return Ok(id as u64);
     }
 
-    fn increment(&self, index1: u64, index2: u64, index3: u64) -> Result<(), Error> {
-        let mut statement = self.database.prepare(INCREMENT_QUERY)?;
+    async fn increment(&self, index1: u64, index2: u64, index3: u64) -> Result<(), Error> {
+        let mut statement = self.connection.prepare(INCREMENT_QUERY)?;
         statement.bind_iter::<_, (_, i64)>([
             (":index1", index1 as i64),
             (":index2", index2 as i64),
@@ -110,8 +117,8 @@ impl Database for SqliteDB {
         Ok(())
     }
 
-    fn get_word(&self, index: u64) -> Result<String, Error> {
-        let mut statement = self.database.prepare(GET_QUERY)?;
+    async fn get_word(&self, index: u64) -> Result<String, Error> {
+        let mut statement = self.connection.prepare(GET_QUERY)?;
         statement.bind((":id", index as i64))?;
 
         if let Ok(sqlite::State::Row) = statement.next() {
@@ -123,8 +130,8 @@ impl Database for SqliteDB {
         }
     }
 
-    fn get_single_occurrences(&self, index: u64) -> Result<Vec<(u64, u64)>, Error> {
-        let mut statement = self.database.prepare(SINGLE_NEXT_QUERY)?;
+    async fn get_single_occurrences(&self, index: u64) -> Result<Vec<(u64, u64)>, Error> {
+        let mut statement = self.connection.prepare(SINGLE_NEXT_QUERY)?;
         statement.bind((":index2", index as i64))?;
 
         let mut vec: Vec<(u64, u64)> = vec![];
@@ -137,8 +144,12 @@ impl Database for SqliteDB {
         Ok(vec)
     }
 
-    fn get_double_occurrences(&self, index1: u64, index2: u64) -> Result<Vec<(u64, u64)>, Error> {
-        let mut statement = self.database.prepare(DOUBLE_NEXT_QUERY)?;
+    async fn get_double_occurrences(
+        &self,
+        index1: u64,
+        index2: u64,
+    ) -> Result<Vec<(u64, u64)>, Error> {
+        let mut statement = self.connection.prepare(DOUBLE_NEXT_QUERY)?;
         statement
             .bind_iter::<_, (_, i64)>([(":index1", index1 as i64), (":index2", index2 as i64)])?;
 
