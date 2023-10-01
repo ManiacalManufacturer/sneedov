@@ -268,44 +268,20 @@ impl Markov {
     }
 
     async fn next_word(&self, index1: u64, index2: u64) -> Result<u64, Error> {
-        //let mut result;
-        //let hybrid;
         let database = &self.database;
 
         match self.markov_type {
-            MarkovType::Single => {
-                //let vec = self.database.get_single_occurrences(index2).await?;
-                //let mut rng = thread_rng();
-                //result = vec.choose_weighted(&mut rng, |item| item.1)?.0;
-                Ok(get_occurrence!(database, index2))
-            }
-            MarkovType::Double => {
-                //let vec = self.database.get_double_occurrences(index1, index2).await?;
-                //let mut rng = thread_rng();
-                //result = vec.choose_weighted(&mut rng, |item| item.1)?.0;
-                Ok(get_occurrence!(database, index1, index2).0)
-            }
+            MarkovType::Single => Ok(get_occurrence!(database, index2)),
+            MarkovType::Double => Ok(get_occurrence!(database, index1, index2).0),
             MarkovType::Hybrid(t) => {
-                //let vec = self.database.get_double_occurrences(index1, index2).await?;
-                //{
-                //    let mut rng = thread_rng();
-                //    let tuple = vec.choose_weighted(&mut rng, |item| item.1)?;
-                //    result = tuple.0;
-                //    hybrid = tuple.1;
-                //}
                 let tuple = get_occurrence!(database, index1, index2);
                 if tuple.1 < t {
-                    //let vec = self.database.get_single_occurrences(index2).await?;
-                    //let mut rng = thread_rng();
-                    //result = vec.choose_weighted(&mut rng, |item| item.1)?.0;
                     Ok(get_occurrence!(database, index2))
                 } else {
                     Ok(tuple.0)
                 }
             }
         }
-
-        //Ok(result)
     }
 
     async fn prev_word(&self, index1: u64, index2: u64) -> Result<u64, Error> {
@@ -358,14 +334,12 @@ impl Markov {
         let split = split_sentence(line);
         let database = &self.database;
 
-        //STEP 1 Separate the words
         let word;
         {
             let mut rng = thread_rng();
             word = split.choose(&mut rng).unwrap();
         }
 
-        //STEP 2 Select the word from the database
         let vec = self.database.get_case_insensitive(word).await?;
         let index;
         let keyword;
@@ -380,7 +354,6 @@ impl Markov {
             }
         }
 
-        //STEP 3 Match depending on the keyword
         if keyword == "first" {
             Ok(generate!(reply self, index, START_INDEX, END_INDEX))
         } else if keyword == "last" {
@@ -410,8 +383,6 @@ impl Markov {
                 first_half.push_str(" ");
             }
             Ok(first_half + &second_half)
-            //let err: Error = String::from("Placeholder").into();
-            //Err(err)
         }
     }
 
