@@ -27,7 +27,7 @@ enum State {
 }
 
 async fn start_bot() -> Result<Bot, Box<dyn std::error::Error + Send + Sync>> {
-    let secret = config::get_secret()?;
+    let secret = config::get_secret().await?;
     Ok(Bot::new(secret.token))
 }
 
@@ -71,6 +71,7 @@ async fn listen(bot: Bot, msg: Message) -> HandlerResult {
     let chat_id = msg.chat.id.0.to_string();
     let database = connect_database(&chat_id).await?;
 
+    let bot_id = get_bot_id().await?;
     if let Some(text) = msg.text() {
         if let Err(e) = Markov::new(Arc::new(database))
             .await?
@@ -83,7 +84,7 @@ async fn listen(bot: Bot, msg: Message) -> HandlerResult {
     }
 
     let database = connect_database(&chat_id).await?;
-    let config = config::get_config(&chat_id)?;
+    let config = config::get_config(&chat_id).await?;
 
     if let Some(reply) = msg.reply_to_message() {
         if reply.from().unwrap().id.to_string() == bot_id {

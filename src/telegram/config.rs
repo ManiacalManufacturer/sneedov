@@ -1,7 +1,7 @@
 use super::super::markov::MarkovType;
 use serde::{Deserialize, Serialize};
-use std::fs::{create_dir_all, read_to_string, File};
-use std::io::Write;
+use tokio::fs::{create_dir_all, read_to_string, File};
+use tokio::io::AsyncWriteExt;
 use toml;
 
 #[derive(Serialize, Deserialize)]
@@ -17,12 +17,12 @@ pub struct MarkovConfig {
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 
-pub fn get_secret() -> Result<Secret, Error> {
+pub async fn get_secret() -> Result<Secret, Error> {
     let path_name = format!("secret.toml");
     let path = std::path::Path::new(&path_name);
     let dir = std::path::Path::new("./");
 
-    let result = read_to_string(path);
+    let result = read_to_string(path).await;
     let string;
     match result {
         Ok(s) => {
@@ -32,8 +32,8 @@ pub fn get_secret() -> Result<Secret, Error> {
             let config = Secret { token: "".into() };
 
             let toml = toml::to_string(&config)?;
-            write_default(dir, path, toml)?;
-            string = read_to_string(path)?;
+            write_default(dir, path, toml).await?;
+            string = read_to_string(path).await?;
         }
         Err(e) => {
             return Err(Box::new(e));
@@ -43,13 +43,13 @@ pub fn get_secret() -> Result<Secret, Error> {
     Ok(toml::from_str(&string)?)
 }
 
-pub fn get_config(filename: &str) -> Result<MarkovConfig, Error> {
+pub async fn get_config(filename: &str) -> Result<MarkovConfig, Error> {
     let path_name = format!("./{}/config.toml", filename);
     let dir_name = format!("./{}/", filename);
     let path = std::path::Path::new(&path_name);
     let dir = std::path::Path::new(&dir_name);
 
-    let result = read_to_string(path);
+    let result = read_to_string(path).await;
     let string;
     match result {
         Ok(s) => {
@@ -62,8 +62,8 @@ pub fn get_config(filename: &str) -> Result<MarkovConfig, Error> {
             };
 
             let toml = toml::to_string(&config)?;
-            write_default(dir, path, toml)?;
-            string = read_to_string(path)?;
+            write_default(dir, path, toml).await?;
+            string = read_to_string(path).await?;
         }
         Err(e) => {
             return Err(Box::new(e));
@@ -77,14 +77,14 @@ pub fn get_config(filename: &str) -> Result<MarkovConfig, Error> {
     Ok(config)
 }
 
-fn write_default(
+async fn write_default(
     dir: &std::path::Path,
     path: &std::path::Path,
     string: String,
 ) -> Result<(), Error> {
-    create_dir_all(dir)?;
+    create_dir_all(dir).await?;
 
-    let mut file = File::create(path)?;
-    file.write_all(string.as_bytes())?;
+    let mut file = File::create(path).await?;
+    file.write_all(string.as_bytes()).await?;
     Ok(())
 }
