@@ -70,25 +70,30 @@ type HandlerResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 async fn listen(bot: Bot, msg: Message) -> HandlerResult {
     let chat_id = msg.chat.id.0.to_string();
     let database = connect_database(&chat_id).await?;
-    let config = config::get_config(&chat_id).await?;
-    let mut markov = Markov::builder(Arc::new(database))
-        .markov_type(config.markov_type)
-        .build()
-        .await?;
 
     let bot_id = get_bot_id().await?;
     if let Some(text) = msg.text() {
-        if let Err(e) = markov.append_line(text.to_string()).await {
+        if let Err(e) = Markov::new(Arc::new(database))
+            .await?
+            .append_line(text.to_string())
+            .await
+        {
             eprintln!("Couldn't append to database: {}", e);
             return Err(e);
         }
     }
 
+    let database = connect_database(&chat_id).await?;
+    let config = config::get_config(&chat_id).await?;
+
     if let Some(reply) = msg.reply_to_message() {
-        if reply.from().unwrap().id.to_string() == bot_id && config.reply.enabled {
+        if reply.from().unwrap().id.to_string() == bot_id {
             if let Some(text) = msg.text() {
-                let sentence = markov
-                    .generate_reply(config.reply.unique, text.to_string())
+                let sentence = Markov::builder(Arc::new(database))
+                    .markov_type(config.markov_type)
+                    .build()
+                    .await?
+                    .generate_reply(text.to_string())
                     .await?;
                 bot.send_message(msg.from().unwrap().id, sentence).await?;
                 return Ok(());
@@ -97,7 +102,12 @@ async fn listen(bot: Bot, msg: Message) -> HandlerResult {
     }
 
     if chance(config.chance.unwrap()) {
-        let sentence = markov.generate().await?;
+        let sentence = Markov::builder(Arc::new(database))
+            .markov_type(config.markov_type)
+            .build()
+            .await?
+            .generate()
+            .await?;
         bot.send_message(msg.chat.id, sentence).await?;
     }
 
@@ -153,7 +163,7 @@ async fn _reply(bot: Bot, msg: Message, cmd: Command) -> HandlerResult {
                 .markov_type(config.markov_type)
                 .build()
                 .await?
-                .generate_reply(config.reply.unique, text.to_string())
+                .generate_reply(text.to_string())
                 .await;
 
             match sentence {
