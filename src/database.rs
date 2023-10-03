@@ -209,7 +209,7 @@ impl Database for SqliteDB {
             vec1.push(statement.read::<i64, _>("prev").unwrap() as u64);
         }
 
-        if vec1.len() == 0 {
+        if vec1.is_empty() {
             let err: Error = String::from("The length of vec is 0").into();
             return Err(err);
         }
@@ -222,7 +222,7 @@ impl Database for SqliteDB {
             vec2.push(statement.read::<i64, _>("occurrences").unwrap() as u64);
         }
 
-        let vec = vec1.into_iter().zip(vec2.into_iter()).collect();
+        let vec = vec1.into_iter().zip(vec2).collect();
 
         Ok(vec)
     }
@@ -242,7 +242,7 @@ impl Database for SqliteDB {
             vec1.push(statement.read::<i64, _>("prev").unwrap() as u64);
         }
 
-        if vec1.len() == 0 {
+        if vec1.is_empty() {
             let err: Error = String::from("The length of vec is 0").into();
             return Err(err);
         }
@@ -255,7 +255,7 @@ impl Database for SqliteDB {
             vec2.push(statement.read::<i64, _>("occurrences").unwrap() as u64);
         }
 
-        let vec = vec1.into_iter().zip(vec2.into_iter()).collect();
+        let vec = vec1.into_iter().zip(vec2).collect();
 
         Ok(vec)
     }
