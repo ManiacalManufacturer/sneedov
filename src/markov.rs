@@ -27,8 +27,8 @@ type Error = Box<dyn std::error::Error + Send + Sync>;
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", content = "hybrid-threshold")]
 pub enum MarkovType {
-    Single,
-    Double,
+    Single(u64),
+    Double(u64),
     Hybrid(u64),
 }
 
@@ -168,8 +168,8 @@ impl Markov {
         let database = &self.database;
 
         match self.markov_type {
-            MarkovType::Single => Ok(get_occurrence!(database, index2)),
-            MarkovType::Double => Ok(get_occurrence!(database, index1, index2).0),
+            MarkovType::Single(_) => Ok(get_occurrence!(database, index2)),
+            MarkovType::Double(_) => Ok(get_occurrence!(database, index1, index2).0),
             MarkovType::Hybrid(t) => {
                 let tuple = get_occurrence!(database, index1, index2);
                 if tuple.1 < t {
@@ -185,8 +185,8 @@ impl Markov {
         let database = &self.database;
 
         match self.markov_type {
-            MarkovType::Single => Ok(get_occurrence!(reverse database, index1)),
-            MarkovType::Double => Ok(get_occurrence!(reverse database, index1, index2).0),
+            MarkovType::Single(_) => Ok(get_occurrence!(reverse database, index1)),
+            MarkovType::Double(_) => Ok(get_occurrence!(reverse database, index1, index2).0),
             MarkovType::Hybrid(t) => {
                 let tuple = get_occurrence!(reverse database, index1, index2);
                 if tuple.1 < t {
@@ -196,11 +196,6 @@ impl Markov {
                 }
             }
         }
-
-        Ok(result)
-    }
-    async fn get_word(&self, index: u64) -> Result<String, Error> {
-        Ok(self.database.get_word(index).await?)
     }
 
     async fn get_word(&self, index: u64) -> Result<String, Error> {
@@ -314,7 +309,6 @@ pub async fn sneedov_feed(filename: &str, database: DatabaseType) -> Result<(), 
 
     let _ = reader.read_to_string(&mut string);
     let vec: Vec<&str> = string.split('\n').map(|x| x.trim()).collect();
-
 
     let markov = Markov::new(database).await?;
 
