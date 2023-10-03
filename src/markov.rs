@@ -306,32 +306,33 @@ impl Markov {
     }
 
     pub async fn generate(&mut self) -> Result<String, Error> {
-        let mut index = START_INDEX;
-        let mut old_index = index;
-        let mut sentence = String::new();
+        //let mut index = START_INDEX;
+        //let mut old_index = index;
+        //let mut sentence = String::new();
 
-        loop {
-            (old_index, index) = (index, self.next_word(old_index, index).await?);
+        //loop {
+        //    (old_index, index) = (index, self.next_word(old_index, index).await?);
 
-            if index == END_INDEX {
-                break;
-            }
+        //    if index == END_INDEX {
+        //        break;
+        //    }
 
-            let word = self.get_word(index).await?;
-            let is_punc = is_punctuation(word.parse::<char>());
+        //    let word = self.get_word(index).await?;
+        //    let is_punc = is_punctuation(word.parse::<char>());
 
-            if sentence.len() != 0 && !is_punc {
-                sentence.push_str(" ");
-            }
+        //    if sentence.len() != 0 && !is_punc {
+        //        sentence.push_str(" ");
+        //    }
 
-            sentence.push_str(&word);
-        }
+        //    sentence.push_str(&word);
+        //}
 
-        Ok(sentence)
+        //Ok(sentence)
+        Ok(generate!(self, START_INDEX, START_INDEX, END_INDEX))
     }
 
-    pub async fn generate_reply(&mut self, line: String) -> Result<String, Error> {
-        let split = split_sentence(line);
+    pub async fn generate_reply(&mut self, unique: bool, line: String) -> Result<String, Error> {
+        let split = split_sentence(line.clone());
         let database = &self.database;
 
         let word;
@@ -354,10 +355,12 @@ impl Markov {
             }
         }
 
+        let sentence;
+
         if keyword == "first" {
-            Ok(generate!(reply self, index, START_INDEX, END_INDEX))
+            sentence = generate!(reply self, index, START_INDEX, END_INDEX)
         } else if keyword == "last" {
-            Ok(generate!(reverse self, index, END_INDEX, START_INDEX))
+            sentence = generate!(reverse self, index, END_INDEX, START_INDEX)
         } else {
             let second = get_occurrence!(database, index);
             let mut first_half = generate!(reverse self, index, second, START_INDEX);
@@ -382,7 +385,13 @@ impl Markov {
             if !is_punc1 && !is_punc2 {
                 first_half.push_str(" ");
             }
-            Ok(first_half + &second_half)
+            sentence = first_half + &second_half
+        }
+
+        if unique && sentence == line {
+            Ok(generate!(self, START_INDEX, START_INDEX, END_INDEX))
+        } else {
+            Ok(sentence)
         }
     }
 

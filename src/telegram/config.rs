@@ -10,9 +10,16 @@ pub struct Secret {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct Reply {
+    pub enabled: bool,
+    pub unique: bool,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct MarkovConfig {
-    pub markov_type: MarkovType,
     pub chance: Option<u64>,
+    pub markov_type: MarkovType,
+    pub reply: Reply,
 }
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -57,8 +64,12 @@ pub async fn get_config(filename: &str) -> Result<MarkovConfig, Error> {
         }
         Err(ref e) if e.kind() == std::io::ErrorKind::NotFound => {
             let config = MarkovConfig {
-                markov_type: MarkovType::default(),
                 chance: Some(10),
+                markov_type: MarkovType::default(),
+                reply: Reply {
+                    enabled: true,
+                    unique: false,
+                },
             };
 
             let toml = toml::to_string(&config)?;
