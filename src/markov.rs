@@ -43,7 +43,7 @@ pub enum ReplyMode {
 
 impl Default for MarkovType {
     fn default() -> Self {
-        MarkovType::Hybrid(DEFAULT_HYBRID_THRESHOLD)
+        MarkovType::Hybrid(DEFAULT_HYBRID_THRESHOLD.into())
     }
 }
 
@@ -196,6 +196,11 @@ impl Markov {
                 }
             }
         }
+
+        Ok(result)
+    }
+    async fn get_word(&self, index: u64) -> Result<String, Error> {
+        Ok(self.database.get_word(index).await?)
     }
 
     async fn get_word(&self, index: u64) -> Result<String, Error> {
@@ -309,6 +314,7 @@ pub async fn sneedov_feed(filename: &str, database: DatabaseType) -> Result<(), 
 
     let _ = reader.read_to_string(&mut string);
     let vec: Vec<&str> = string.split('\n').map(|x| x.trim()).collect();
+
 
     let markov = Markov::new(database).await?;
 
