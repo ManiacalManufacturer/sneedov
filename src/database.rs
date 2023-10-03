@@ -37,12 +37,24 @@ const GET_QUERY: &str = "
     SELECT string FROM Words WHERE id = :id;
     ";
 
+const GET_CASE_INSENSITIVE: &str = "
+    SELECT * FROM Words WHERE LOWER(string) = :string;
+    ";
+
 const SINGLE_NEXT_QUERY: &str = "
-    SELECT * FROM Occurrence WHERE curr = :index2;
+    SELECT * FROM Occurrence WHERE curr = :index;
     ";
 
 const DOUBLE_NEXT_QUERY: &str = "
     SELECT * FROM Occurrence WHERE prev = :index1 AND curr = :index2;
+    ";
+
+const DOUBLE_PREV_QUERY: &str = "
+    SELECT * FROM Occurrence WHERE curr = :index1 AND next = :index2;
+    ";
+
+const REVERSE_QUERY: &str = "
+    SELECT occurrences FROM Occurrence WHERE curr = :index1 and next = :index2;
     ";
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -69,9 +81,19 @@ pub trait Database {
 
     async fn get_word(&self, index: u64) -> Result<String, Error>;
 
+    async fn get_case_insensitive(&self, string: &str) -> Result<Vec<(u64, String)>, Error>;
+
     async fn get_single_occurrences(&self, index: u64) -> Result<Vec<(u64, u64)>, Error>;
 
     async fn get_double_occurrences(
+        &self,
+        index1: u64,
+        index2: u64,
+    ) -> Result<Vec<(u64, u64)>, Error>;
+
+    async fn get_prev_single_occurrences(&self, index: u64) -> Result<Vec<(u64, u64)>, Error>;
+
+    async fn get_prev_double_occurrences(
         &self,
         index1: u64,
         index2: u64,
@@ -130,15 +152,29 @@ impl Database for SqliteDB {
         }
     }
 
+    async fn get_case_insensitive(&self, string: &str) -> Result<Vec<(u64, String)>, Error> {
+        let mut statement = self.connection.prepare(GET_CASE_INSENSITIVE)?;
+        statement.bind((":string", string.to_lowercase().as_str()))?;
+
+        let mut vec: Vec<(u64, String)> = vec![];
+        while let Ok(sqlite::State::Row) = statement.next() {
+            vec.push((
+                statement.read::<i64, _>("id")? as u64,
+                statement.read::<String, _>("keyword")?,
+            ));
+        }
+        Ok(vec)
+    }
+
     async fn get_single_occurrences(&self, index: u64) -> Result<Vec<(u64, u64)>, Error> {
         let mut statement = self.connection.prepare(SINGLE_NEXT_QUERY)?;
-        statement.bind((":index2", index as i64))?;
+        statement.bind((":index", index as i64))?;
 
         let mut vec: Vec<(u64, u64)> = vec![];
         while let Ok(sqlite::State::Row) = statement.next() {
             vec.push((
-                statement.read::<i64, _>("next").unwrap() as u64,
-                statement.read::<i64, _>("occurrences").unwrap() as u64,
+                statement.read::<i64, _>("next")? as u64,
+                statement.read::<i64, _>("occurrences")? as u64,
             ));
         }
         Ok(vec)
@@ -160,6 +196,67 @@ impl Database for SqliteDB {
                 statement.read::<i64, _>("occurrences").unwrap() as u64,
             ));
         }
+        Ok(vec)
+    }
+
+    async fn get_prev_single_occurrences(&self, index: u64) -> Result<Vec<(u64, u64)>, Error> {
+        let mut statement = self.connection.prepare(SINGLE_NEXT_QUERY)?;
+        statement.bind((":index", index as i64))?;
+
+        let mut vec1: Vec<u64> = vec![];
+        let mut vec2: Vec<u64> = vec![];
+        while let Ok(sqlite::State::Row) = statement.next() {
+            vec1.push(statement.read::<i64, _>("prev").unwrap() as u64);
+        }
+
+        if vec1.is_empty() {
+            let err: Error = String::from("The length of vec is 0").into();
+            return Err(err);
+        }
+        let prev = vec1[0];
+
+        let mut statement = self.connection.prepare(REVERSE_QUERY)?;
+        statement
+            .bind_iter::<_, (_, i64)>([(":index1", prev as i64), (":index2", index as i64)])?;
+        while let Ok(sqlite::State::Row) = statement.next() {
+            vec2.push(statement.read::<i64, _>("occurrences").unwrap() as u64);
+        }
+
+        let vec = vec1.into_iter().zip(vec2).collect();
+
+        Ok(vec)
+    }
+
+    async fn get_prev_double_occurrences(
+        &self,
+        index1: u64,
+        index2: u64,
+    ) -> Result<Vec<(u64, u64)>, Error> {
+        let mut statement = self.connection.prepare(DOUBLE_PREV_QUERY)?;
+        statement
+            .bind_iter::<_, (_, i64)>([(":index1", index1 as i64), (":index2", index2 as i64)])?;
+
+        let mut vec1: Vec<u64> = vec![];
+        let mut vec2: Vec<u64> = vec![];
+        while let Ok(sqlite::State::Row) = statement.next() {
+            vec1.push(statement.read::<i64, _>("prev").unwrap() as u64);
+        }
+
+        if vec1.is_empty() {
+            let err: Error = String::from("The length of vec is 0").into();
+            return Err(err);
+        }
+        let prev = vec1[0];
+
+        let mut statement = self.connection.prepare(REVERSE_QUERY)?;
+        statement
+            .bind_iter::<_, (_, i64)>([(":index1", prev as i64), (":index2", index1 as i64)])?;
+        while let Ok(sqlite::State::Row) = statement.next() {
+            vec2.push(statement.read::<i64, _>("occurrences").unwrap() as u64);
+        }
+
+        let vec = vec1.into_iter().zip(vec2).collect();
+
         Ok(vec)
     }
 }

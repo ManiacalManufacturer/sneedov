@@ -1,7 +1,6 @@
 use super::database::SqliteDB;
 use super::markov::Markov;
 
-use rand::{thread_rng, Rng};
 use std::sync::Arc;
 
 use teloxide::dispatching::{dialogue, UpdateHandler};
@@ -16,6 +15,7 @@ enum Command {
     Help,
     Start,
     Markov,
+    Reply(String),
 }
 
 #[derive(Clone, Default)]
@@ -26,16 +26,19 @@ enum State {
 }
 
 async fn start_bot() -> Result<Bot, Box<dyn std::error::Error + Send + Sync>> {
-    let secret = config::get_secret()?;
+    let secret = config::get_secret().await?;
     Ok(Bot::new(secret.token))
 }
 
-fn chance(number: u64) -> bool {
-    let mut rng = thread_rng();
-    if rng.gen_range(1..number) == 1 {
-        return true;
+async fn get_bot_id() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    let secret = config::get_secret().await?;
+    if let Some(tuple) = secret.token.split_once(':') {
+        Ok(tuple.0.to_string())
+    } else {
+        let err: Box<dyn std::error::Error + Send + Sync> =
+            String::from("Invalid Token: Could not get bot id from token").into();
+        Err(err)
     }
-    false
 }
 
 async fn connect_database(
@@ -52,30 +55,47 @@ async fn connect_database(
     Ok(database)
 }
 
+async fn create_markov(chat_id: &str) -> Result<Markov, Box<dyn std::error::Error + Send + Sync>> {
+    let database = Arc::new(connect_database(chat_id).await?);
+    let config = config::get_config(chat_id).await?;
+
+    Markov::builder(database)
+        .markov_type(config.markov_type)
+        .markov_chance(config.chance)
+        .reply_mode(config.reply_mode)
+        .build()
+        .await
+}
+
 type MyDialogue = Dialogue<State, dialogue::InMemStorage<State>>;
 type HandlerResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
 async fn listen(bot: Bot, msg: Message) -> HandlerResult {
-    let chat_id = msg.chat.id.0.to_string();
-    let database = connect_database(&chat_id).await?;
+    //let chat_id = msg.chat.id.0.to_string();
+    //let database = connect_database(&chat_id).await?;
 
+    let markov = create_markov(&msg.chat.id.0.to_string()).await?;
+
+    let bot_id = get_bot_id().await?;
     if let Some(text) = msg.text() {
-        Markov::new(Arc::new(database))
-            .await?
-            .append_line(text.to_string())
-            .await?;
+        if let Err(e) = markov.append_line(text).await {
+            eprintln!("Couldn't append to database: {}", e);
+            return Err(e);
+        }
     }
 
-    let database = connect_database(&chat_id).await?;
-    let config = config::get_config(&chat_id)?;
+    if let Some(reply) = msg.reply_to_message() {
+        if reply.from().unwrap().id.to_string() == bot_id {
+            if let Some(text) = msg.text() {
+                let sentence = markov.generate_reply(text).await?;
+                bot.send_message(msg.from().unwrap().id, sentence).await?;
+                return Ok(());
+            }
+        }
+    }
 
-    if chance(config.chance.unwrap()) {
-        let sentence = Markov::builder(Arc::new(database))
-            .markov_type(config.markov_type)
-            .build()
-            .await?
-            .generate()
-            .await?;
+    if markov.chance() {
+        let sentence = markov.generate().await?;
         bot.send_message(msg.chat.id, sentence).await?;
     }
 
@@ -95,24 +115,46 @@ async fn help(bot: Bot, msg: Message) -> HandlerResult {
 }
 
 async fn generate(bot: Bot, msg: Message) -> HandlerResult {
-    let chat_id = msg.chat.id.0.to_string();
-    let database = connect_database(&chat_id).await?;
-    let config = config::get_config(&chat_id)?;
+    let markov = create_markov(&msg.chat.id.0.to_string()).await?;
 
-    let sentence = Markov::builder(Arc::new(database))
-        .markov_type(config.markov_type)
-        .build()
-        .await?
-        .generate()
-        .await;
+    let sentence = markov.generate().await;
 
     match sentence {
         Ok(text) => {
             bot.send_message(msg.chat.id, text).await?;
+            Ok(())
         }
         Err(e) => {
             eprintln!("{}", e);
-            return Err(e);
+            Err(e)
+        }
+    }
+}
+
+async fn _reply(bot: Bot, msg: Message, cmd: Command) -> HandlerResult {
+    let chat_id = msg.chat.id.0.to_string();
+    let database = connect_database(&chat_id).await?;
+    let config = config::get_config(&chat_id).await?;
+    let sentence;
+
+    if let Command::Reply(text) = cmd {
+        if !text.is_empty() {
+            sentence = Markov::builder(Arc::new(database))
+                .markov_type(config.markov_type)
+                .build()
+                .await?
+                .generate_reply(&text)
+                .await;
+
+            match sentence {
+                Ok(text) => {
+                    bot.send_message(msg.chat.id, text).await?;
+                }
+                Err(e) => {
+                    eprintln!("{}", e);
+                    return Err(e);
+                }
+            }
         }
     }
 
@@ -129,6 +171,7 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
                 .branch(case![Command::Start].endpoint(start)),
         )
         .branch(case![State::Listen].branch(case![Command::Markov].endpoint(generate)));
+    //.branch(case![State::Listen].branch(case![Command::Reply(text)].endpoint(reply)));
 
     let message_handler = Update::filter_message()
         .branch(command_handler)

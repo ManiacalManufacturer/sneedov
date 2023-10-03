@@ -9,7 +9,9 @@ use std::fs::OpenOptions;
 use std::io::{prelude::*, BufReader};
 use std::sync::Arc;
 
+pub mod macros;
 pub mod split;
+use macros::{generate, get_occurrence};
 use split::{is_punctuation, split_sentence};
 
 const START_KEYWORD: (&str, &str) = ("start", "");
@@ -30,6 +32,15 @@ pub enum MarkovType {
     Hybrid(u64),
 }
 
+#[derive(Default, Serialize, Deserialize)]
+pub enum ReplyMode {
+    Off,
+    Random,
+    #[default]
+    Reply,
+    ReplyUnique,
+}
+
 impl Default for MarkovType {
     fn default() -> Self {
         MarkovType::Hybrid(DEFAULT_HYBRID_THRESHOLD.into())
@@ -41,11 +52,15 @@ type DatabaseType = Arc<dyn Database + Send + Sync>;
 pub struct Markov {
     database: DatabaseType,
     markov_type: MarkovType,
+    markov_chance: u64,
+    reply_mode: ReplyMode,
 }
 
 pub struct MarkovBuilder {
     database: DatabaseType,
     markov_type: MarkovType,
+    markov_chance: u64,
+    reply_mode: ReplyMode,
 }
 
 impl MarkovBuilder {
@@ -53,11 +68,23 @@ impl MarkovBuilder {
         MarkovBuilder {
             database,
             markov_type: MarkovType::default(),
+            markov_chance: 10,
+            reply_mode: ReplyMode::default(),
         }
     }
 
     pub fn markov_type(mut self, markov_type: MarkovType) -> MarkovBuilder {
         self.markov_type = markov_type;
+        self
+    }
+
+    pub fn markov_chance(mut self, markov_chance: u64) -> MarkovBuilder {
+        self.markov_chance = markov_chance;
+        self
+    }
+
+    pub fn reply_mode(mut self, reply_mode: ReplyMode) -> MarkovBuilder {
+        self.reply_mode = reply_mode;
         self
     }
 
@@ -67,6 +94,8 @@ impl MarkovBuilder {
         Ok(Markov {
             database: self.database,
             markov_type: self.markov_type,
+            markov_chance: self.markov_chance,
+            reply_mode: self.reply_mode,
         })
     }
 }
@@ -76,6 +105,8 @@ impl Markov {
         let markov = Markov {
             database,
             markov_type: MarkovType::default(),
+            markov_chance: 10,
+            reply_mode: ReplyMode::default(),
         };
 
         markov.database.add_word(END_KEYWORD).await?;
@@ -87,7 +118,15 @@ impl Markov {
         MarkovBuilder::new(database)
     }
 
-    pub async fn append_line(&self, line: String) -> Result<(), Error> {
+    pub fn chance(&self) -> bool {
+        let mut rng = thread_rng();
+        if rng.gen_range(1..=self.markov_chance) == 1 {
+            return true;
+        }
+        false
+    }
+
+    pub async fn append_line(&self, line: &str) -> Result<(), Error> {
         let split = split_sentence(line);
 
         let (mut prev, mut curr) = (START_KEYWORD, START_KEYWORD);
@@ -113,6 +152,11 @@ impl Markov {
             })
             .collect::<FuturesUnordered<_>>();
 
+        if next == START_KEYWORD {
+            //This will never occur with teloxide
+            panic!("Empty line");
+        }
+
         futures.push(self.append_word(curr, next, END_KEYWORD));
         while let Some(res) = futures.next().await {
             res?;
@@ -121,32 +165,34 @@ impl Markov {
     }
 
     async fn next_word(&self, index1: u64, index2: u64) -> Result<u64, Error> {
-        let mut result;
-        let hybrid;
+        let database = &self.database;
 
         match self.markov_type {
-            MarkovType::Single => {
-                let vec = self.database.get_single_occurrences(index2).await?;
-                let mut rng = thread_rng();
-                result = vec.choose_weighted(&mut rng, |item| item.1)?.0;
-            }
-            MarkovType::Double => {
-                let vec = self.database.get_double_occurrences(index1, index2).await?;
-                let mut rng = thread_rng();
-                result = vec.choose_weighted(&mut rng, |item| item.1)?.0;
-            }
+            MarkovType::Single => Ok(get_occurrence!(database, index2)),
+            MarkovType::Double => Ok(get_occurrence!(database, index1, index2).0),
             MarkovType::Hybrid(t) => {
-                let vec = self.database.get_double_occurrences(index1, index2).await?;
-                {
-                    let mut rng = thread_rng();
-                    let tuple = vec.choose_weighted(&mut rng, |item| item.1)?;
-                    result = tuple.0;
-                    hybrid = tuple.1;
+                let tuple = get_occurrence!(database, index1, index2);
+                if tuple.1 < t {
+                    Ok(get_occurrence!(database, index2))
+                } else {
+                    Ok(tuple.0)
                 }
-                if hybrid < t {
-                    let vec = self.database.get_single_occurrences(index2).await?;
-                    let mut rng = thread_rng();
-                    result = vec.choose_weighted(&mut rng, |item| item.1)?.0;
+            }
+        }
+    }
+
+    async fn prev_word(&self, index1: u64, index2: u64) -> Result<u64, Error> {
+        let database = &self.database;
+
+        match self.markov_type {
+            MarkovType::Single => Ok(get_occurrence!(reverse database, index1)),
+            MarkovType::Double => Ok(get_occurrence!(reverse database, index1, index2).0),
+            MarkovType::Hybrid(t) => {
+                let tuple = get_occurrence!(reverse database, index1, index2);
+                if tuple.1 < t {
+                    Ok(get_occurrence!(reverse database, index1))
+                } else {
+                    Ok(tuple.0)
                 }
             }
         }
@@ -157,29 +203,90 @@ impl Markov {
         Ok(self.database.get_word(index).await?)
     }
 
-    pub async fn generate(&mut self) -> Result<String, Error> {
-        let mut index = START_INDEX;
-        let mut old_index = index;
-        let mut sentence = String::new();
+    async fn get_word(&self, index: u64) -> Result<String, Error> {
+        self.database.get_word(index).await
+    }
 
-        loop {
-            (old_index, index) = (index, self.next_word(old_index, index).await?);
+    pub async fn generate(&self) -> Result<String, Error> {
+        Ok(generate!(self, START_INDEX, START_INDEX, END_INDEX))
+    }
 
-            if index == END_INDEX {
-                break;
+    pub async fn generate_reply(&self, line: &str) -> Result<String, Error> {
+        match &self.reply_mode {
+            ReplyMode::Off => {
+                return Ok("".to_owned());
             }
-
-            let word = self.get_word(index).await?;
-            let is_punc = is_punctuation(word.parse::<char>());
-
-            if sentence.len() != 0 && !is_punc {
-                sentence.push_str(" ");
+            ReplyMode::Random => {
+                return Ok(generate!(self, START_INDEX, START_INDEX, END_INDEX));
             }
+            _ => {}
+        };
 
-            sentence.push_str(&word);
+        let split = split_sentence(line);
+        let database = &self.database;
+
+        let word;
+        {
+            let mut rng = thread_rng();
+            word = split.choose(&mut rng).unwrap();
         }
 
-        Ok(sentence)
+        let vec = self.database.get_case_insensitive(word).await?;
+        let index;
+        let keyword;
+        {
+            let mut rng = thread_rng();
+            if let Some(tuple) = vec.choose(&mut rng) {
+                index = tuple.0;
+                keyword = tuple.1.to_owned();
+            } else {
+                let err: Error = String::from("Could not find similar words!").into();
+                return Err(err);
+            }
+        }
+        let sentence;
+
+        if keyword == "first" {
+            sentence = generate!(reply self, index, START_INDEX, END_INDEX);
+        } else if keyword == "last" {
+            sentence = generate!(reverse self, index, END_INDEX, START_INDEX);
+        } else {
+            let second = get_occurrence!(database, index);
+            let mut first_half = generate!(reverse self, index, second, START_INDEX);
+            let second_half = generate!(reply self, second, index, END_INDEX);
+
+            let is_punc1 = {
+                let x = first_half.clone().chars().next_back();
+                match x {
+                    Some(x) => is_punctuation(Ok(x)),
+                    None => true,
+                }
+            };
+
+            let is_punc2 = {
+                let x = second_half.clone().chars().next();
+                match x {
+                    Some(x) => is_punctuation(Ok(x)),
+                    None => true,
+                }
+            };
+
+            if !is_punc1 && !is_punc2 {
+                first_half.push(' ');
+            }
+            sentence = first_half + &second_half;
+        }
+
+        match &self.reply_mode {
+            ReplyMode::ReplyUnique => {
+                if line == sentence {
+                    Ok(generate!(self, START_INDEX, START_INDEX, END_INDEX))
+                } else {
+                    Ok(sentence)
+                }
+            }
+            _ => Ok(sentence),
+        }
     }
 
     async fn append_word(
@@ -206,19 +313,20 @@ pub async fn sneedov_feed(filename: &str, database: DatabaseType) -> Result<(), 
     let mut string = String::new();
 
     let _ = reader.read_to_string(&mut string);
-    let vec: Vec<&str> = string.split("\n").collect();
+    let vec: Vec<&str> = string.split('\n').map(|x| x.trim()).collect();
+
 
     let markov = Markov::new(database).await?;
 
     let length = vec.len() as u64;
     let bar = indicatif::ProgressBar::new(length);
 
-    let mut futures = vec
+    let futures = vec
         .iter()
-        .filter(|x| if *x != &"" { true } else { false })
-        .map(|x| markov.append_line(x.to_string()));
+        .filter(|&x| !x.is_empty())
+        .map(|x| markov.append_line(x));
 
-    while let Some(res) = futures.next() {
+    for res in futures {
         res.await?;
         bar.inc(1);
     }
