@@ -35,8 +35,8 @@ impl std::fmt::Display for Access {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Access::All => write!(f, "All users"),
-            Access::Admins => write!(f, "Admins Only"),
-            Access::Owner => write!(f, "Owner Only"),
+            Access::Admins => write!(f, "Admins only"),
+            Access::Owner => write!(f, "Owner only"),
         }
     }
 }
