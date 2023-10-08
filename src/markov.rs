@@ -21,10 +21,12 @@ const START_INDEX: u64 = 2;
 const END_INDEX: u64 = 1;
 
 const DEFAULT_HYBRID_THRESHOLD: u64 = 10;
+pub const DEFAULT_MARKOV_TYPE: MarkovType = MarkovType::Hybrid(DEFAULT_HYBRID_THRESHOLD);
+pub const DEFAULT_REPLY_MODE: ReplyMode = ReplyMode::Reply;
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Copy)]
 #[serde(tag = "type", content = "hybrid-threshold")]
 pub enum MarkovType {
     Single(u64),
@@ -32,18 +34,23 @@ pub enum MarkovType {
     Hybrid(u64),
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Copy)]
 pub enum ReplyMode {
     Off,
     Random,
-    #[default]
     Reply,
     ReplyUnique,
 }
 
 impl Default for MarkovType {
     fn default() -> Self {
-        MarkovType::Hybrid(DEFAULT_HYBRID_THRESHOLD.into())
+        DEFAULT_MARKOV_TYPE
+    }
+}
+
+impl Default for ReplyMode {
+    fn default() -> Self {
+        DEFAULT_REPLY_MODE
     }
 }
 
@@ -119,6 +126,10 @@ impl Markov {
     }
 
     pub fn chance(&self) -> bool {
+        if self.markov_chance == 0 {
+            return false;
+        }
+
         let mut rng = thread_rng();
         if rng.gen_range(1..=self.markov_chance) == 1 {
             return true;
