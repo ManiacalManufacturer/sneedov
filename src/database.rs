@@ -83,7 +83,9 @@ impl SqliteBlacklist {
             connection: sqlite::Connection::open_with_full_mutex(path)?,
         };
         db.connection.execute(
-            "CREATE TABLE IF NOT EXISTS Blacklist(
+            "PRAGMA synchronous = OFF;
+            
+            CREATE TABLE IF NOT EXISTS Blacklist(
                 chat_id INT NOT NULL,
                 user_id INT NOT NULL,
                 UNIQUE(chat_id, user_id)
