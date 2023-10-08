@@ -11,7 +11,6 @@ pub enum Access {
     Owner,
 }
 
-#[derive(PartialEq)]
 pub enum User {
     Normal,
     Blacklisted,
