@@ -73,6 +73,27 @@ impl SqliteDB {
     }
 }
 
+pub struct SqliteBlacklist {
+    connection: sqlite::ConnectionWithFullMutex,
+}
+
+impl SqliteBlacklist {
+    pub async fn new(path: &std::path::Path) -> Result<Self, Error> {
+        let db = SqliteBlacklist {
+            connection: sqlite::Connection::open_with_full_mutex(path)?,
+        };
+        db.connection.execute(
+            "CREATE TABLE IF NOT EXISTS Blacklist(
+                chat_id INT NOT NULL,
+                user_id INT NOT NULL,
+                UNIQUE(chat_id, user_id)
+                );
+            ",
+        )?;
+        Ok(db)
+    }
+}
+
 #[async_trait]
 pub trait Database {
     async fn add_word(&self, tuple: (&str, &str)) -> Result<u64, Error>;
@@ -98,6 +119,15 @@ pub trait Database {
         index1: u64,
         index2: u64,
     ) -> Result<Vec<(u64, u64)>, Error>;
+}
+
+#[async_trait]
+pub trait Blacklist {
+    async fn blacklist(&self, chat_id: i64, user_id: u64) -> Result<(), Error>;
+
+    async fn unblacklist(&self, chat_id: i64, user_id: u64) -> Result<(), Error>;
+
+    async fn is_blacklisted(&self, chat_id: i64, user_id: u64) -> Result<bool, Error>;
 }
 
 #[async_trait]
@@ -258,5 +288,49 @@ impl Database for SqliteDB {
         let vec = vec1.into_iter().zip(vec2).collect();
 
         Ok(vec)
+    }
+}
+
+#[async_trait]
+impl Blacklist for SqliteBlacklist {
+    async fn blacklist(&self, chat_id: i64, user_id: u64) -> Result<(), Error> {
+        let mut statement = self.connection.prepare(
+            "INSERT OR IGNORE INTO Blacklist (chat_id, user_id) VALUES(:chat_id, :user_id);",
+        )?;
+
+        statement
+            .bind_iter::<_, (_, i64)>([(":chat_id", chat_id), (":user_id", user_id as i64)])?;
+
+        while let Ok(sqlite::State::Row) = statement.next() {}
+        Ok(())
+    }
+
+    async fn unblacklist(&self, chat_id: i64, user_id: u64) -> Result<(), Error> {
+        let mut statement = self
+            .connection
+            .prepare("DELETE FROM Blacklist WHERE chat_id = :chat_id AND user_id = :user_id;")?;
+
+        statement
+            .bind_iter::<_, (_, i64)>([(":chat_id", chat_id), (":user_id", user_id as i64)])?;
+
+        while let Ok(sqlite::State::Row) = statement.next() {}
+        Ok(())
+    }
+
+    async fn is_blacklisted(&self, chat_id: i64, user_id: u64) -> Result<bool, Error> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT 1 FROM Blacklist WHERE chat_id = :chat_id AND user_id = :user_id;")?;
+
+        statement
+            .bind_iter::<_, (_, i64)>([(":chat_id", chat_id), (":user_id", user_id as i64)])?;
+        let mut is_blacklisted = false;
+
+        while let Ok(sqlite::State::Row) = statement.next() {
+            if let Ok(_) = statement.read::<i64, _>("1") {
+                is_blacklisted = true;
+            }
+        }
+        Ok(is_blacklisted)
     }
 }
