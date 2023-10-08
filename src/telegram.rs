@@ -154,6 +154,15 @@ async fn generate(bot: Bot, msg: Message) -> HandlerResult {
         .await?
         .is_authorized(config.access.markov.generate)
     {
+        bot.send_message(
+            msg.chat.id,
+            format!(
+                "You do not have permission to use this command! (Access level: {})",
+                config.access.markov.generate
+            ),
+        )
+        .reply_to_message_id(msg.id)
+        .await?;
         return Ok(());
     }
 
@@ -185,6 +194,15 @@ async fn reply(bot: Bot, msg: Message, cmd: Command) -> HandlerResult {
         .await?
         .is_authorized(config.access.markov.reply)
     {
+        bot.send_message(
+            msg.chat.id,
+            format!(
+                "You do not have permission to use this command! (Access level: {})",
+                config.access.markov.reply
+            ),
+        )
+        .reply_to_message_id(msg.id)
+        .await?;
         return Ok(());
     }
 
