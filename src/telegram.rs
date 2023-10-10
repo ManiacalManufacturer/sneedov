@@ -112,7 +112,7 @@ async fn listen(bot: Bot, msg: Message) -> HandlerResult {
             if user_level.is_authorized(config.access.markov.reply) {
                 if let Some(text) = msg.text() {
                     let sentence = markov.generate_reply(text).await?;
-                    bot.send_message(msg.from().unwrap().id, sentence)
+                    bot.send_message(msg.chat.id, sentence)
                         .reply_to_message_id(msg.id)
                         .await?;
                     return Ok(());
