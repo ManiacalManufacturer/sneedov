@@ -285,7 +285,7 @@ impl Markov {
 
         match &self.reply_mode {
             ReplyMode::ReplyUnique => {
-                if line == sentence {
+                if line.to_lowercase() == sentence.to_lowercase() {
                     Ok(generate!(self, START_INDEX, START_INDEX, END_INDEX))
                 } else {
                     Ok(sentence)
