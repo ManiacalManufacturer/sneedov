@@ -175,6 +175,16 @@ impl Markov {
         Ok(())
     }
 
+    pub async fn append_newlines(&self, lines: &str) -> Result<(), Error> {
+        let split = lines.split('\n');
+        for n in split {
+            let line = n.trim();
+            self.append_line(line).await?;
+        }
+
+        Ok(())
+    }
+
     async fn next_word(&self, index1: u64, index2: u64) -> Result<u64, Error> {
         let database = &self.database;
 
