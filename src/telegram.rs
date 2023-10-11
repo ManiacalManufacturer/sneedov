@@ -99,10 +99,17 @@ async fn listen(bot: Bot, msg: Message) -> HandlerResult {
 
     let bot_id = get_bot_id().await?;
     if let Some(text) = msg.text() {
-        if let Err(e) = markov.append_line(text).await {
-            if user_level.is_authorized(config.access.markov.append) {
-                eprintln!("Couldn't append to database: {}", e);
-                return Err(e);
+        if user_level.is_authorized(config.access.markov.append) {
+            if config.separate_newline {
+                if let Err(e) = markov.append_newlines(text).await {
+                    eprintln!("Couldn't append to database: {}", e);
+                    return Err(e);
+                }
+            } else {
+                if let Err(e) = markov.append_line(text).await {
+                    eprintln!("Couldn't append to database: {}", e);
+                    return Err(e);
+                }
             }
         }
     }

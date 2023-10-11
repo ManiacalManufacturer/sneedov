@@ -37,6 +37,7 @@ pub struct MarkovConfigToml {
     markov_type: Option<MarkovType>,
     chance: Option<u64>,
     reply_mode: Option<ReplyMode>,
+    separate_newline: Option<bool>,
     access: Option<Access>,
 }
 
@@ -63,6 +64,7 @@ pub struct MarkovConfig {
     pub markov_type: MarkovType,
     pub chance: u64,
     pub reply_mode: ReplyMode,
+    pub separate_newline: bool,
     pub access: AccessConfig,
 }
 
@@ -90,6 +92,7 @@ async fn set_missing_config(
     let chance = get_or_default!(has_missing, configtoml.chance, 10);
     let markov_type = get_or_default!(has_missing, configtoml.markov_type, MarkovType::default());
     let reply_mode = get_or_default!(has_missing, configtoml.reply_mode, ReplyMode::default());
+    let separate_newline = get_or_default!(has_missing, configtoml.separate_newline, true);
     //SCHIZOPHRENIC CODE!!!
     let access = match &mut configtoml.access {
         Some(v) => {
@@ -147,6 +150,7 @@ async fn set_missing_config(
         chance,
         markov_type,
         reply_mode,
+        separate_newline,
         access,
     })
 }

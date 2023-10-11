@@ -9,6 +9,7 @@ pub const DEFAULT_CHANCE: u64 = 10;
 pub const DEFAULT_MARKOV_ACCESS_APPEND: chat::Access = chat::Access::All;
 pub const DEFAULT_MARKOV_ACCESS_GENERATE: chat::Access = chat::Access::All;
 pub const DEFAULT_MARKOV_ACCESS_REPLY: chat::Access = chat::Access::All;
+pub const DEFAULT_SEPARATE_NEWLINE: bool = true;
 
 pub const DEFAULT_MARKOV_ACCESS: MarkovAccessConfig = MarkovAccessConfig {
     append: DEFAULT_MARKOV_ACCESS_APPEND,
@@ -33,6 +34,7 @@ pub const DEFAULT_CONFIG: MarkovConfig = MarkovConfig {
     markov_type: DEFAULT_MARKOV_TYPE,
     chance: DEFAULT_CHANCE,
     reply_mode: DEFAULT_REPLY_MODE,
+    separate_newline: DEFAULT_SEPARATE_NEWLINE,
     access: DEFAULT_ACCESS,
 };
 
@@ -56,5 +58,6 @@ pub const DEFAULT_CONFIG_TOML: MarkovConfigToml = MarkovConfigToml {
     markov_type: Some(DEFAULT_MARKOV_TYPE),
     chance: Some(DEFAULT_CHANCE),
     reply_mode: Some(DEFAULT_REPLY_MODE),
+    separate_newline: Some(DEFAULT_SEPARATE_NEWLINE),
     access: Some(DEFAULT_ACCESS_TOML),
 };
