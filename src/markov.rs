@@ -165,7 +165,9 @@ impl Markov {
 
         if next == START_KEYWORD {
             //This will never occur with teloxide
-            panic!("Empty line");
+            //It just did
+            //panic!("Empty line");
+            return Ok(());
         }
 
         futures.push(self.append_word(curr, next, END_KEYWORD));
